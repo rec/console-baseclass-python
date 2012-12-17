@@ -15,8 +15,7 @@ class Display_Information(object):
     def __init__(self):
         """
         Args:
-            lol
-
+            SUBMODULE SHIIIIT
         Returns:
             Nothing
         """
