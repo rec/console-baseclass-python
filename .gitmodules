@@ -1,6 +1,3 @@
-[submodule "console-baseclass-python"]
-	path = console-baseclass-python
-	url = git@github.com:vladwow91/console-baseclass-python
 [submodule "doc/build/html"]
 	path = doc/build/html
 	url = git@github.com:vladwow91/console-baseclass-python.git
