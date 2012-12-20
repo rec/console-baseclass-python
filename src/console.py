@@ -340,7 +340,7 @@ class Command(object):
 
 
     def add_flag(self, longf, shortf=None, description=None, input=FLAG_INPUT_IGNORE, method=None):
-        """
+        """Add a flag to the current command.
         See description of :meth:`Console.add_flag`
         """
 
@@ -384,21 +384,20 @@ class Console(Display_Information):
         """
         import sys
 
-        self.available_commands
+        self.available_commands = []
         self.terminal = []
         self.terminal_active_flags = []
         self.terminal_additional_args = []
         #Attributes available in flag/command supplied methods
         self.current_command_active_flags = []
         self.current_command_additional_args = []
-        self.current_command_name
+        self.current_command_name = None
         #Attributes available only within a flag handler
-        self.current_flag_name
-        self.current_flag_input
+        self.current_flag_name = None
+        self.current_flag_input = None
 
-        self.terminal = Command("Terminal", self._dummy, "Terminal - represents startup")
-
-
+        self.terminal = Command("Terminal", self._dummy, "Terminal - represents startup.")
+        self._add_default_flags()
         self.console_init()
 
         #Parse input, divide into flags. Execute shit
@@ -410,37 +409,49 @@ class Console(Display_Information):
         do_exit = False
         log_level = DI_STDOUT
         DI_settings = {}
-        #Detect if help was one of them
         for map in self.terminal_active_flags:
             flag = map["longf"]
             if flag == "--help":
                 do_exit = True
             elif flag == "--log":
                 log_level = DI_LOG
-            elif flag == "--log-stdout"
+            elif flag == "--log-stdout":
                 log_level = DI_STDOUT_LOG
             elif flag == "--verbose":
                 DI_settings["verbose"] = DI_STDOUT
             elif flag == "--debug":
                 DI_settings["debug"] = DI_STDOUT
             elif flag == "--verbose-debug":
+                DI_settings["debug"] = DI_STDOUT
                 DI_settings["verbosedebug"] = DI_STDOUT
 
-        if do_exit
+        if do_exit:
             map["method"](self.terminal.available_flags)
             sys.exit()
 
-        for (key, value) in DI_settings:
-            DI_settings["key"] = log_level
+        for (key, value) in DI_settings.items():
+            DI_settings[key] = log_level
         Display_Information.__init__(self, DI_settings)
 
-        #Add default commands
-        self.console_add_command("exit", self._dummy, "Exit the console.")
-        self.console_add_command("help", self._console_help, "Print all available commands")
+        #Call flags in order of apperance in string
+        self.current_command_name = "TERMINAL"
+        self.current_command_active_flags = self.terminal_active_flags
+        self.current_command_additional_args = self.terminal_additional_args
+        for map in self.terminal_active_flags:
+            self.current_flag_name = map["longf"]
+            self.current_flag_input = map["input"]
+            if map["method"] == None:
+                self.console_default_flag_handler()
+            else:
+                map["method"]()
 
-    def add_flag(self, longf, shortf=None, description=None, input=FLAG_INPUT_IGNORE, method=None):
+        #Add default commands
+        self.add_command("exit", self._dummy, "Exit the console.")
+        self.add_command("help", self._console_help, "Print all available commands.")
+
+    def terminal_add_flag(self, longf, shortf=None, description=None, input=FLAG_INPUT_IGNORE, method=None):
         """
-        Add a flag option to current command.
+        Add a flag option to the terminal.
 
         args:
             - longf (str): *long* flag name with two leading dashes used to indicate
@@ -463,42 +474,58 @@ class Console(Display_Information):
         """
         self.terminal.add_flag(longf, shortf, description, input, method)
 
-    def console_add_command(self, name, method, description)
+    def add_command(self, name, method, description):
         """
         """
+        return
         raise NotImplementedError
 
     def console_init(self):
         """Called before terminal args are parsed. This allows for custom flags to be
         added by overriding this method. Add flag options by calling :meth:`Console.add_flag`.
         """
+        self.terminal.add_flag("--test", "-t", input=FLAG_INPUT_FLOAT)
+
+    def console_default_flag_handler(self):
+        """Default flag handler invoked when no method is supplied.
+        Override this function if you want to handle all flags in one method.
+
+        Available attributes:
+            - self.current_command_active_flags (list): List of dictionaries holding all present
+              flags when invoking this command.
+            - self.current_command_additional_args (list): List of string objects, all unaccounted
+              for tokens invoking this command.
+            - self.current_command_name (str): *Command.command_name* that was invoked with
+              the flag that called this method. For the terminal, this value is 'TERMINAL'.
+            - self.current_flag_name (str): *longf* that called this method.
+            - self.current_flag_input (): None if flag require no input. Object is converted to
+              its expected object.
+        """
+        print self.current_flag_name
+        print self.current_flag_input
+
+    def _add_default_flags(self):
+        """Assist function to add all default flags
+        """
+        self.terminal.add_flag("--log", "-l",
+                "Route all -v, -d & -D print to logfile instead of STDOUT.")
+        self.terminal.add_flag("--log-stdout", "-L",
+                "Route all -v, -d & -D print to both logfile and STDOUT.")
+        self.terminal.add_flag("--verbose", "-v", "Print detailed program flow to STDOUT.")
+        self.terminal.add_flag("--debug", "-d",
+                "Print debug information in program flow to STDOUT.")
+        self.terminal.add_flag("--verbose-debug", "-D",
+                "Print detailed debug information in program flow to STDOUT.")
+
+
+    def _console_help(self):
+        """lol
+        """
         pass
 
     def _dummy(self):
         pass
 
-def test(i):
-    i.debug('shiiit')
-    i.vdebug("omfg loog my arse!")
-    i.verbose("hah!")
-
-def parser_test():
-    #create a command with flags
-    command = Command("lol", test, "lol")
-    command.add_flag("--test", input=FLAG_INPUT_INT)
-    command.add_flag("--rofl", input=FLAG_INPUT_STR)
-    command.add_flag("--kek", shortf="-f", input=FLAG_INPUT_FLOAT)
-
-
-    mylist = ['console.py','first', 'second', 'third']
-    mystring = "command --test 5 --rompe --kek 2 -f 20 --strict test my arse"
-    parser = _Console_Parser()
-    parser.parse_line(command, mystring, is_command=False)
-    print parser.active_flags
-    print parser.additional_args
-
 if __name__ == '__main__':
-    DI_settings = {'verbose':DI_STDOUT_LOG, 'debug':DI_STDOUT, 'verbosedebug':DI_STDOUT_LOG}
-    i = Display_Information(DI_settings)
+    c = Console()
 
-    parser_test()
