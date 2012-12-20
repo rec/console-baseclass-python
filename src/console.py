@@ -370,7 +370,8 @@ class Command(object):
             Internal command called whenever the HELP flag is
             issued for a command
         """
-        print_flags(self.available_flags)
+        ph = _Print_Help_Command(self)
+        ph.print_flags()
 
 class Console(Display_Information):
     """
@@ -486,7 +487,7 @@ class Console(Display_Information):
         """Called before terminal args are parsed. This allows for custom flags to be
         added by overriding this method. Add flag options by calling :meth:`Console.add_flag`.
         """
-        self.terminal.add_flag("--test", "-t", input=FLAG_INPUT_FLOAT)
+        self.terminal.add_flag("--test", input=FLAG_INPUT_FLOAT)
 
     def console_default_flag_handler(self):
         """Default flag handler invoked when no method is supplied.
@@ -536,6 +537,28 @@ class _Print_Help_Command:
         self.command = command
         self.TS = Terminal_Size()
 
+    def print_flags(self):
+        """Print all flags for this command to the terminal
+        """
+
+        print "Usage: lalalalala"
+
+        for flag in self.command.available_flags:
+            line = "  "
+
+            if flag["shortf"] != None:
+                line += flag["shortf"] + ", "
+            line += flag["longf"] + "  "
+
+            input = flag["input"]
+            if input == FLAG_INPUT_STR:
+                line += "[str]"
+            elif input == FLAG_INPUT_INT:
+                line += "[int]"
+            elif input == FLAG_INPUT_FLOAT:
+                line += "[float]"
+
+            print line
 
 class Terminal_Size:
     """Return the terminal size. Works on Windows, Linux, OS X, Cygwin
