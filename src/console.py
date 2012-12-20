@@ -199,6 +199,9 @@ class _Console_Parser(object):
 
         Modules:
             sys
+
+        Raises:
+            TypeError
         """
         import sys
         self.program_name = sys.argv[0]    #sys.argv[0]
@@ -375,12 +378,11 @@ class Console(Display_Information):
     """
     def __init__(self):
         """
-            --log
         Modules:
             sys
 
         Raises:
-            InputError
+            InputError, TypeError, OSError, AttributeError
         """
         import sys
 
@@ -400,7 +402,6 @@ class Console(Display_Information):
         self._add_default_flags()
         self.console_init()
 
-        #Parse input, divide into flags. Execute shit
         parser = _Console_Parser()
         parser.parse_line(self.terminal, sys.argv, False)
         self.terminal_active_flags = parser.get_active_flags()
@@ -426,9 +427,10 @@ class Console(Display_Information):
                 DI_settings["verbosedebug"] = DI_STDOUT
 
         if do_exit:
-            map["method"](self.terminal.available_flags)
+            map["method"]()
             sys.exit()
 
+        #Update Display_Information settings to newest possible level
         for (key, value) in DI_settings.items():
             DI_settings[key] = log_level
         Display_Information.__init__(self, DI_settings)
@@ -518,14 +520,154 @@ class Console(Display_Information):
                 "Print detailed debug information in program flow to STDOUT.")
 
 
-    def _console_help(self):
-        """lol
+    def _console_help(self, flags):
+        """Print all available commands from the console
         """
-        pass
+        print "IN CONSOLE HELP"
+        print flags
 
     def _dummy(self):
         pass
 
+class _Print_Help_Command:
+    """Assist class to pretty print command flags to the terminal
+    """
+    def __init__(self, command):
+        self.command = command
+        self.TS = Terminal_Size()
+
+
+class Terminal_Size:
+    """Return the terminal size. Works on Windows, Linux, OS X, Cygwin
+    """
+    def __init__(self):
+        """
+        Modules:
+            platform
+        """
+        import platform
+
+        self.width = 0
+        self.height = 0
+        self.current_os = platform.system()
+
+        self.refresh()
+
+    def refresh(self):
+        """Perform a check for terminal size. Updates attributes self.width and self.height with
+        new values.
+
+        Returns:
+            - **True** if terminal size has changed.
+            - **False** if terminal size is unchanged.
+        """
+        is_changed = False
+        (w, h) = self.get_terminal_size()
+        if w != self.width:
+            is_changed = True
+            self.width = w
+        if h != self.height:
+            is_changed = True
+            self.height = h
+
+        return is_changed
+
+    def get_terminal_size(self):
+        """Return the terminal size in a tuple
+
+        Returns:
+            Tuple (width, height)
+        """
+        tuple_xy = None
+        if self.current_os == 'Windows':
+           tuple_xy = self._getTS_Windows()
+           if tuple_xy is None:
+              tuple_xy = self._getTS_tput()
+              # needed for window's python in cygwin's xterm!
+        if self.current_os == 'Linux' or self.current_os == 'Darwin' or  self.current_os.startswith('CYGWIN'):
+           tuple_xy = self._getTS_Linux()
+
+        if tuple_xy is None:
+            tuple_xy = (80, 25)      # default value
+        return tuple_xy
+
+
+    def _getTS_Windows(self):
+        """Return terminal size on Windows. Shamelessly stolen from the internet. Source: Unknown
+
+        Modules:
+            ctype.windll, ctype.create_string_buffer, struct
+        """
+        res = None
+        try:
+            from ctypes import windll, create_string_buffer
+
+            # stdin handle is -10
+            # stdout handle is -11
+            # stderr handle is -12
+
+            h = windll.kernel32.GetStdHandle(-12)
+            csbi = create_string_buffer(22)
+            res = windll.kernel32.GetConsoleScreenBufferInfo(h, csbi)
+        except:
+            return None
+        if res:
+            import struct
+            (bufx, bufy, curx, cury, wattr,
+             left, top, right, bottom, maxx, maxy) = struct.unpack("hhhhHhhhhhh", csbi.raw)
+            sizex = right - left + 1
+            sizey = bottom - top + 1
+            return sizex, sizey
+        else:
+            return None
+
+    def _getTS_tput(self):
+        """Get terminal size from xterm. Shamelessly stolen from the internet. Source: Unknown
+
+        Modules:
+            subprocess
+        """
+        # get terminal width
+        # src: http://stackoverflow.com/questions/263890/how-do-i-find-the-width-height-of-a-terminal-window
+        try:
+           import subprocess
+           proc=subprocess.Popen(["tput", "cols"],stdin=subprocess.PIPE,stdout=subprocess.PIPE)
+           output=proc.communicate(input=None)
+           cols=int(output[0])
+           proc=subprocess.Popen(["tput", "lines"],stdin=subprocess.PIPE,stdout=subprocess.PIPE)
+           output=proc.communicate(input=None)
+           rows=int(output[0])
+           return (cols,rows)
+        except:
+           return None
+
+    def _getTS_Linux(self):
+        """Get terminal size from linux. Shamelessly stolen from the internet. Source: Unknown
+
+        Modules:
+            fcntl, termios, struct, os
+        """
+        def ioctl_GWINSZ(fd):
+            try:
+                import fcntl, termios, struct, os
+                cr = struct.unpack('hh', fcntl.ioctl(fd, termios.TIOCGWINSZ,'1234'))
+            except:
+                return None
+            return cr
+        cr = ioctl_GWINSZ(0) or ioctl_GWINSZ(1) or ioctl_GWINSZ(2)
+        if not cr:
+            try:
+                fd = os.open(os.ctermid(), os.O_RDONLY)
+                cr = ioctl_GWINSZ(fd)
+                os.close(fd)
+            except:
+                pass
+        if not cr:
+            try:
+                cr = (env['LINES'], env['COLUMNS'])
+            except:
+                return None
+        return int(cr[1]), int(cr[0])
+
 if __name__ == '__main__':
     c = Console()
-
