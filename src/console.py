@@ -37,7 +37,7 @@ class CallError(Exception):
     """Exception raised when a programming mistake has happend: If for instance a method
     that should only be executed once is called twise, this exception will be raised.
     """
-    def __init__(self, mssage, *args):
+    def __init__(self, message, *args):
         msg = message % args
         Exception.__init__(self, msg)
 
@@ -278,7 +278,15 @@ class _Console_Parser(object):
                 input_value = None
                 if map["input"] > FLAG_INPUT_IGNORE:
                     if (index + 1 >= list_length):
-                        raise InputError("Missing input for flag '%s'", flag_name)
+                        type = "string"
+                        if map["input"] == FLAG_INPUT_STR:
+                            type = "str"
+                        elif map["input"] == FLAG_INPUT_INT:
+                            type = "int"
+                        elif map["input"] == FLAG_INPUT_FLOAT:
+                            type = "float"
+                        raise InputError("Missing input for flag '%s'. Expecting %s ",
+                                flag_name, type)
 
                     index += 1
                     if map["input"] == FLAG_INPUT_STR:
@@ -490,7 +498,7 @@ class Console(Display_Information):
         after initialization and manually call :meth:`process_flag_options`. Be warned:
         :class:`Display_Information` is not initialized until flags are processed.
         """
-        self.terminal.add_flag("--ttesteasd", input=FLAG_INPUT_FLOAT)
+        self.terminal.add_flag("--test", input=FLAG_INPUT_FLOAT)
 
     def console_default_flag_handler(self):
         """Default flag handler invoked when no method is supplied.
@@ -511,19 +519,6 @@ class Console(Display_Information):
         if flag == "--test":
             print "in test flag handler lolol"
 
-    def _add_default_flags(self):
-        """Assist function to add all default flags
-        """
-        self.terminal.add_flag("--log", "-l",
-                "Route all -v, -d & -D print to logfile instead of STDOUT.")
-        self.terminal.add_flag("--log-stdout", "-L",
-                "Route all -v, -d & -D print to both logfile and STDOUT.")
-        self.terminal.add_flag("--verbose", "-v", "Print detailed program flow to STDOUT.")
-        self.terminal.add_flag("--debug", "-d",
-                "Print debug information in program flow to STDOUT.")
-        self.terminal.add_flag("--verbose-debug", "-D",
-                "Print detailed debug information in program flow to STDOUT.")
-
     def process_flag_options(self):
         """Attempts to process terminal flag options and initialize :class:`Display_Information`.
         This will fail if terminal flags have been parsed and initialized.
@@ -532,8 +527,8 @@ class Console(Display_Information):
             CallError
         """
         if self.processed_flag_options:
-            str = "Terminal has already parsed flag inputs. If you ment to call this method you"+
-                "probably need to initialize Console with disable_auto_process_flags"
+            str = "Terminal has already parsed flag inputs. If you ment to call this method you" \
+                " probably need to initialize Console with disable_auto_process_flags"
             raise CallError(str)
         self._process_flag_options()
 
@@ -592,6 +587,18 @@ class Console(Display_Information):
             else:
                 map["method"]()
 
+    def _add_default_flags(self):
+        """Assist function to add all default flags
+        """
+        self.terminal.add_flag("--log", "-l",
+                "Route all -v, -d & -D print to logfile instead of STDOUT.")
+        self.terminal.add_flag("--log-stdout", "-L",
+                "Route all -v, -d & -D print to both logfile and STDOUT.")
+        self.terminal.add_flag("--verbose", "-v", "Print detailed program flow to STDOUT.")
+        self.terminal.add_flag("--debug", "-d",
+                "Print debug information in program flow to STDOUT.")
+        self.terminal.add_flag("--verbose-debug", "-D",
+                "Print detailed debug information in program flow to STDOUT.")
 
     def _console_help(self, flags):
         """Print all available commands from the console
@@ -810,4 +817,5 @@ class Terminal_Size:
         return int(cr[1]), int(cr[0])
 
 if __name__ == '__main__':
-    c = Console(True)
+    c = Console(False)
+    c.process_flag_options()
