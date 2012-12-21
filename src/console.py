@@ -33,6 +33,13 @@ class InputError(Exception):
         msg = message % args
         Exception.__init__(self, msg)
 
+class CallError(Exception):
+    """Exception raised when a programming mistake has happend: If for instance a method
+    that should only be executed once is called twise, this exception will be raised.
+    """
+    def __init__(self, mssage, *args):
+        msg = message % args
+        Exception.__init__(self, msg)
 
 class Display_Information(object):
     """This class is utilized to relay information flow throughout the program.
@@ -382,13 +389,16 @@ class Console(Display_Information):
     """
     long ass rant
     """
-    def __init__(self, disable_default_flags=False):
+    def __init__(self, disable_default_flags=False, disable_auto_process_flags=False):
         """
         Kwargs:
             - disable_default_flags (bool): Determines whether or not all the default flags should
               be added to the terminal. If enabled (by default) the :class:`Display_Information`
               information methods will be fully available. If not, they will be disabled(Will
               be initialized to DI_IGNORE) and flags removed from terminal flag list.
+            - disable_auto_process_flags (bool): Determines whether or not the Console init should
+              parse terminal flags. If disabled, :class:`Display_Information` is left uninitialized
+              and :meth:`process_flag_options`must be called manually.
 
         Modules:
             sys
@@ -402,6 +412,7 @@ class Console(Display_Information):
         self.terminal = []
         self.terminal_active_flags = []
         self.terminal_additional_args = []
+        self.processed_flag_options = False
         #Attributes available in flag/command supplied methods
         self.current_command_active_flags = []
         self.current_command_additional_args = []
@@ -414,6 +425,127 @@ class Console(Display_Information):
         if not disable_default_flags:
             self._add_default_flags()
         self.console_init()
+
+        if not disable_auto_process_flags:
+            self._process_flag_options()
+
+                #Add default commands
+        self.add_command("exit", self._dummy, "Exit the console.")
+        self.add_command("help", self._console_help, "Print all available commands.")
+
+    def terminal_add_flag(self, longf, shortf=None, description="", input=FLAG_INPUT_IGNORE, method=None):
+        """
+        Add a flag option to the terminal.
+
+        args:
+            - longf (str): *long* flag name with two leading dashes used to indicate
+              the activation of this flag option.
+        Kwargs:
+            - shortf (str): *short* flag name with one leading dash and only one character,
+              used to indicate the activation of this flag. This is a shortcut option of the
+              required **longf** argument.
+            - description (str): Short description of what this flag does. This information
+              is available when the --help flag is present.
+            - input (int): Indicate that this flag option requires additional input directly
+              succeeding the flag option. The *int* value supplied is one of the following
+              defined flags:
+                0. **FLAG_INPUT_IGNORE** No input is expected. This is the default option.
+                1. **FLAG_INPUT_STR** *string* input is expected.
+                2. **FLAG_INPUT_INT** *integer* input is expected.
+                3. **FLAG_INPUT_FLOAT** *float* input is expected.
+            - method (callable method): If present, this method will be executed once the
+              flag option is present.
+        """
+        self.terminal.add_flag(longf, shortf, description, input, method)
+
+    def terminal_quickadd_opts(self, longf_list, shortf_str=None):
+        """Quick and dirty way to add terminal flags,
+        The list of longf is composed of strings formated in the following way:
+        "longflagname". If the flag expects input, it is followed by a "=(o)" where o is either
+            - f for FLAG_INPUT_FLOAT expects float
+            - s for FLAG_INPUT_STR expects string
+            - i for FLAG_INPUT_INT Expects integer
+
+        eg
+        self.terminal_quickadd_opts(["test=(f)", "myflag", "myint=(i)"], "?fi")
+        would produce the flags:
+            - --test [float]
+            - -f --myflag
+            - -i --myint [int]
+        """
+        raise NotImplementedError
+
+    def add_command(self, name, method, description):
+        """
+        """
+        return
+        raise NotImplementedError
+
+    def console_init(self):
+        """Called before terminal args are parsed. This allows for custom flags to be
+        added by overriding this method. Add flag options by calling
+        :meth:`Console.terminal_add_flag`.
+
+        If Console is initialized with disable_auto_process_flags, you can add the flags
+        after initialization and manually call :meth:`process_flag_options`. Be warned:
+        :class:`Display_Information` is not initialized until flags are processed.
+        """
+        self.terminal.add_flag("--ttesteasd", input=FLAG_INPUT_FLOAT)
+
+    def console_default_flag_handler(self):
+        """Default flag handler invoked when no method is supplied.
+        Override this function if you want to handle all flags in one method.
+
+        Available attributes:
+            - self.current_command_active_flags (list): List of dictionaries holding all present
+              flags when invoking this command.
+            - self.current_command_additional_args (list): List of string objects, all unaccounted
+              for tokens invoking this command.
+            - self.current_command_name (str): *Command.command_name* that was invoked with
+              the flag that called this method. For the terminal, this value is 'TERMINAL'.
+            - self.current_flag_name (str): *longf* that called this method.
+            - self.current_flag_input (): None if flag require no input. Object is converted to
+              its expected object.
+        """
+        flag = self.current_flag_name
+        if flag == "--test":
+            print "in test flag handler lolol"
+
+    def _add_default_flags(self):
+        """Assist function to add all default flags
+        """
+        self.terminal.add_flag("--log", "-l",
+                "Route all -v, -d & -D print to logfile instead of STDOUT.")
+        self.terminal.add_flag("--log-stdout", "-L",
+                "Route all -v, -d & -D print to both logfile and STDOUT.")
+        self.terminal.add_flag("--verbose", "-v", "Print detailed program flow to STDOUT.")
+        self.terminal.add_flag("--debug", "-d",
+                "Print debug information in program flow to STDOUT.")
+        self.terminal.add_flag("--verbose-debug", "-D",
+                "Print detailed debug information in program flow to STDOUT.")
+
+    def process_flag_options(self):
+        """Attempts to process terminal flag options and initialize :class:`Display_Information`.
+        This will fail if terminal flags have been parsed and initialized.
+
+        Raises:
+            CallError
+        """
+        if self.processed_flag_options:
+            str = "Terminal has already parsed flag inputs. If you ment to call this method you"+
+                "probably need to initialize Console with disable_auto_process_flags"
+            raise CallError(str)
+        self._process_flag_options()
+
+    def _process_flag_options(self):
+        """
+        Process the terminal input line and execute the methods associated with present flags
+
+        Modules:
+            sys
+        """
+        import sys
+        self.processed_flag_options = True
 
         parser = _Console_Parser()
         parser.parse_line(self.terminal, sys.argv, False)
@@ -460,96 +592,6 @@ class Console(Display_Information):
             else:
                 map["method"]()
 
-        #Add default commands
-        self.add_command("exit", self._dummy, "Exit the console.")
-        self.add_command("help", self._console_help, "Print all available commands.")
-
-    def terminal_add_flag(self, longf, shortf=None, description="", input=FLAG_INPUT_IGNORE, method=None):
-        """
-        Add a flag option to the terminal.
-
-        args:
-            - longf (str): *long* flag name with two leading dashes used to indicate
-              the activation of this flag option.
-        Kwargs:
-            - shortf (str): *short* flag name with one leading dash and only one character,
-              used to indicate the activation of this flag. This is a shortcut option of the
-              required **longf** argument.
-            - description (str): Short description of what this flag does. This information
-              is available when the --help flag is present.
-            - input (int): Indicate that this flag option requires additional input directly
-              succeeding the flag option. The *int* value supplied is one of the following
-              defined flags:
-                0. **FLAG_INPUT_IGNORE** No input is expected. This is the default option.
-                1. **FLAG_INPUT_STR** *string* input is expected.
-                2. **FLAG_INPUT_INT** *integer* input is expected.
-                3. **FLAG_INPUT_FLOAT** *float* input is expected.
-            - method (callable method): If present, this method will be executed once the
-              flag option is present.
-        """
-        self.terminal.add_flag(longf, shortf, description, input, method)
-
-    def terminal_quickadd_opts(self, longf_list, shortf_str=None):
-        """Quick and dirty way to add terminal flags,
-        The list of longf is composed of strings formated in the following way:
-        "longflagname". If the flag expects input, it is followed by a "=(o)" where o is either
-            - f for FLAG_INPUT_FLOAT expects float
-            - s for FLAG_INPUT_STR expects string
-            - i for FLAG_INPUT_INT Expects integer
-
-        eg
-        self.terminal_quickadd_opts(["test=(f)", "myflag", "myint=(i)"], "?fi")
-        would produce the flags:
-            - --test [float]
-            - -f --myflag
-            - -i --myint [int]
-        """
-
-    def add_command(self, name, method, description):
-        """
-        """
-        return
-        raise NotImplementedError
-
-    def console_init(self):
-        """Called before terminal args are parsed. This allows for custom flags to be
-        added by overriding this method. Add flag options by calling
-        :meth:`Console.terminal_add_flag`.
-        """
-        self.terminal.add_flag("--ttesteasd", input=FLAG_INPUT_FLOAT)
-
-    def console_default_flag_handler(self):
-        """Default flag handler invoked when no method is supplied.
-        Override this function if you want to handle all flags in one method.
-
-        Available attributes:
-            - self.current_command_active_flags (list): List of dictionaries holding all present
-              flags when invoking this command.
-            - self.current_command_additional_args (list): List of string objects, all unaccounted
-              for tokens invoking this command.
-            - self.current_command_name (str): *Command.command_name* that was invoked with
-              the flag that called this method. For the terminal, this value is 'TERMINAL'.
-            - self.current_flag_name (str): *longf* that called this method.
-            - self.current_flag_input (): None if flag require no input. Object is converted to
-              its expected object.
-        """
-        flag = self.current_flag_name
-        if flag == "--test":
-            print "in test flag handler lolol"
-
-    def _add_default_flags(self):
-        """Assist function to add all default flags
-        """
-        self.terminal.add_flag("--log", "-l",
-                "Route all -v, -d & -D print to logfile instead of STDOUT.")
-        self.terminal.add_flag("--log-stdout", "-L",
-                "Route all -v, -d & -D print to both logfile and STDOUT.")
-        self.terminal.add_flag("--verbose", "-v", "Print detailed program flow to STDOUT.")
-        self.terminal.add_flag("--debug", "-d",
-                "Print debug information in program flow to STDOUT.")
-        self.terminal.add_flag("--verbose-debug", "-D",
-                "Print detailed debug information in program flow to STDOUT.")
-
 
     def _console_help(self, flags):
         """Print all available commands from the console
@@ -569,7 +611,7 @@ class _Print_Help_Command:
         self.lineoffset_desc = 0
         self.MIN_DESC_WIDTH = 20
 
-    def calculate_bounds(self):
+    def _calculate_bounds(self):
         """Calculate the line offset at which description begins
         """
         self.lineoffset_desc = 0
@@ -601,10 +643,13 @@ class _Print_Help_Command:
 
 
     def print_flags(self):
-        """Print all flags for this command to the terminal
+        """Print all flags for this command to the terminal in the format:
+
+        Usage: program_name [--flags] command.usage
+
+        -f --flag [optiontype]      description
         """
-        import sys
-        self.calculate_bounds()
+        self._calculate_bounds()
         self.TS.refresh()
         self.lineoffset_desc += 7
         if (self.TS.width -self.lineoffset_desc) < self.MIN_DESC_WIDTH:
