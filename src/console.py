@@ -319,6 +319,10 @@ class Command(object):
             - self.method (callable method): Method to be executed for current command.
             - self.description (str): Description of what the command does.
             - self.available_flags (list): All flags added to this command.
+            - self.usage (str): Description of expected (additional) arguments custom for
+              this particular command. Eg. *"path_to_dir(str) max_open_files(int)"*. This will
+              be appended after *'Usage: self.command_name [--flags] '*
+            - self.PHC (object _Print_Help_Command): Assistant class to print all help options.
 
         The *available_flags* attribute dictionary is formated as follows:
         {'longf':{'shortf':(str), 'description:(str), 'input':(), 'method':(callable method)}}
@@ -337,14 +341,16 @@ class Command(object):
         self.method = method
         self.description = description
         self.available_flags = []
+        self.usage = ""
+        self.PHC = _Print_Help_Command(self)
 
         self.add_flag(longf="--help", shortf="-h", description="Display available flag options",
                 method=self._command_help)
 
 
-    def add_flag(self, longf, shortf=None, description=None, input=FLAG_INPUT_IGNORE, method=None):
+    def add_flag(self, longf, shortf=None, description="", input=FLAG_INPUT_IGNORE, method=None):
         """Add a flag to the current command.
-        See description of :meth:`Console.add_flag`
+        See description of :meth:`Console.terminal_add_flag`
         """
 
         if method != None:
@@ -370,15 +376,20 @@ class Command(object):
             Internal command called whenever the HELP flag is
             issued for a command
         """
-        ph = _Print_Help_Command(self)
-        ph.print_flags()
+        self.PHC.print_flags()
 
 class Console(Display_Information):
     """
     long ass rant
     """
-    def __init__(self):
+    def __init__(self, disable_default_flags=False):
         """
+        Kwargs:
+            - disable_default_flags (bool): Determines whether or not all the default flags should
+              be added to the terminal. If enabled (by default) the :class:`Display_Information`
+              information methods will be fully available. If not, they will be disabled(Will
+              be initialized to DI_IGNORE) and flags removed from terminal flag list.
+
         Modules:
             sys
 
@@ -399,8 +410,9 @@ class Console(Display_Information):
         self.current_flag_name = None
         self.current_flag_input = None
 
-        self.terminal = Command("Terminal", self._dummy, "Terminal - represents startup.")
-        self._add_default_flags()
+        self.terminal = Command(sys.argv[0], self._dummy, "Terminal - represents startup.")
+        if not disable_default_flags:
+            self._add_default_flags()
         self.console_init()
 
         parser = _Console_Parser()
@@ -452,7 +464,7 @@ class Console(Display_Information):
         self.add_command("exit", self._dummy, "Exit the console.")
         self.add_command("help", self._console_help, "Print all available commands.")
 
-    def terminal_add_flag(self, longf, shortf=None, description=None, input=FLAG_INPUT_IGNORE, method=None):
+    def terminal_add_flag(self, longf, shortf=None, description="", input=FLAG_INPUT_IGNORE, method=None):
         """
         Add a flag option to the terminal.
 
@@ -477,6 +489,22 @@ class Console(Display_Information):
         """
         self.terminal.add_flag(longf, shortf, description, input, method)
 
+    def terminal_quickadd_opts(self, longf_list, shortf_str=None):
+        """Quick and dirty way to add terminal flags,
+        The list of longf is composed of strings formated in the following way:
+        "longflagname". If the flag expects input, it is followed by a "=(o)" where o is either
+            - f for FLAG_INPUT_FLOAT expects float
+            - s for FLAG_INPUT_STR expects string
+            - i for FLAG_INPUT_INT Expects integer
+
+        eg
+        self.terminal_quickadd_opts(["test=(f)", "myflag", "myint=(i)"], "?fi")
+        would produce the flags:
+            - --test [float]
+            - -f --myflag
+            - -i --myint [int]
+        """
+
     def add_command(self, name, method, description):
         """
         """
@@ -485,9 +513,10 @@ class Console(Display_Information):
 
     def console_init(self):
         """Called before terminal args are parsed. This allows for custom flags to be
-        added by overriding this method. Add flag options by calling :meth:`Console.add_flag`.
+        added by overriding this method. Add flag options by calling
+        :meth:`Console.terminal_add_flag`.
         """
-        self.terminal.add_flag("--test", input=FLAG_INPUT_FLOAT)
+        self.terminal.add_flag("--ttesteasd", input=FLAG_INPUT_FLOAT)
 
     def console_default_flag_handler(self):
         """Default flag handler invoked when no method is supplied.
@@ -504,8 +533,9 @@ class Console(Display_Information):
             - self.current_flag_input (): None if flag require no input. Object is converted to
               its expected object.
         """
-        print self.current_flag_name
-        print self.current_flag_input
+        flag = self.current_flag_name
+        if flag == "--test":
+            print "in test flag handler lolol"
 
     def _add_default_flags(self):
         """Assist function to add all default flags
@@ -536,29 +566,71 @@ class _Print_Help_Command:
     def __init__(self, command):
         self.command = command
         self.TS = Terminal_Size()
+        self.lineoffset_desc = 0
+        self.MIN_DESC_WIDTH = 20
+
+    def calculate_bounds(self):
+        """Calculate the line offset at which description begins
+        """
+        self.lineoffset_desc = 0
+
+        for flag in self.command.available_flags:
+            line = self._get_flags_string(flag)
+            if len(line) > self.lineoffset_desc:
+                self.lineoffset_desc = len(line)
+
+    def _get_flags_string(self, flag):
+        """Assist function to get flag and input string,
+        eg. -t --test  [float]
+        """
+
+        line = "  "
+        if flag["shortf"] != None:
+            line += flag["shortf"] + ", "
+        line += flag["longf"] + "  "
+
+        input = flag["input"]
+        if input == FLAG_INPUT_STR:
+            line += "[str]"
+        elif input == FLAG_INPUT_INT:
+            line += "[int]"
+        elif input == FLAG_INPUT_FLOAT:
+            line += "[float]"
+
+        return line
+
 
     def print_flags(self):
         """Print all flags for this command to the terminal
         """
+        import sys
+        self.calculate_bounds()
+        self.TS.refresh()
+        self.lineoffset_desc += 7
+        if (self.TS.width -self.lineoffset_desc) < self.MIN_DESC_WIDTH:
+            print "Unable to write help options due to narrow terminal. Please expand it."
+            tmp = self.lineoffset_desc + self.MIN_DESC_WIDTH
+            print "Current width: %d. Minimum required width: %d" % (self.TS.width, tmp)
+            return
 
-        print "Usage: lalalalala"
-
+        print "Usage: " + self.command.command_name + " [--flags] " +self.command.usage + "\n"
         for flag in self.command.available_flags:
-            line = "  "
+            line = self._get_flags_string(flag)
+            num_padd_chars = self.lineoffset_desc - len(line)
 
-            if flag["shortf"] != None:
-                line += flag["shortf"] + ", "
-            line += flag["longf"] + "  "
-
-            input = flag["input"]
-            if input == FLAG_INPUT_STR:
-                line += "[str]"
-            elif input == FLAG_INPUT_INT:
-                line += "[int]"
-            elif input == FLAG_INPUT_FLOAT:
-                line += "[float]"
-
+            line += ''.join([' ' for x in xrange(num_padd_chars)])
+            token_list = flag['description'].split()
+            line_length = len(line)
+            for token in token_list:
+                token_length = len(token)
+                if line_length + token_length >= self.TS.width:
+                    print line
+                    line = ''.join([' ' for x in xrange(self.lineoffset_desc)])
+                    line_length = self.lineoffset_desc
+                line += token + " "
+                line_length += token_length + 1
             print line
+
 
 class Terminal_Size:
     """Return the terminal size. Works on Windows, Linux, OS X, Cygwin
@@ -693,4 +765,4 @@ class Terminal_Size:
         return int(cr[1]), int(cr[0])
 
 if __name__ == '__main__':
-    c = Console()
+    c = Console(True)
