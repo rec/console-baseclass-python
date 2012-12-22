@@ -234,127 +234,6 @@ class Display_Information(object):
         if DI_level == DI_LOG or DI_level == DI_STDOUT_LOG:
             self.fd.write(msg)
 
-class _Console_Parser(object):
-    """Internal
-    """
-    def __init__(self):
-        """
-        Internal structure help parse either a list of strings or a string.
-        The string will be broken into tokens. The list will remove the first element
-        if it equals sys.argv[0] (the program name).
-
-        Modules:
-            sys
-
-        Raises:
-            TypeError
-        """
-        import sys
-        self.program_name = sys.argv[0]    #sys.argv[0]
-        self.active_flags = None
-        self.additional_args = None
-
-    def _precheck_input(self, input):
-        """Sanity check input, always ordering it to a list of arguments without program name
-        """
-        if isinstance(input, list):
-            if input[0] == self.program_name:
-                return input[1:]
-            else:
-                return input
-        if isinstance(input, str):
-            return input.split()
-
-        raise TypeError("Input is not of type 'str' or 'list'")
-
-    def get_active_flags(self):
-        """*getter* function to retrieve all active flags.
-        Returns:
-            - None if no command is parsed with :meth:`parse_line`
-            - Empty list ([]) if no flags where present for last parsed line.
-            - List filled with dictionaries, {'longf':(str), 'description':(str), 'input':(),
-              'method':(callable method)}
-        """
-        return self.active_flags
-
-    def get_additional_args(self):
-        """*getter* function to retrieve all additional arguments.
-        Returns:
-            - None if no command is parsed with :meth:`parse_line`
-            - Emptry list ([]) if no additional arguments where present last parsed line.
-            - List filled with all unaccounted for arguments (eg, did not match any flags (and
-              their required input) from :class:`Command` defined with :meth:`Command.add_flag`
-              (which is used by :meth:`Console.add_flag`)).
-        """
-        return self.additional_args
-
-    def parse_line(self, command, input, is_command=True):
-        """input can be either string or a list
-        """
-        self.active_flags = []
-        self.additional_args = []
-        inputlist = self._precheck_input(input)
-
-        if is_command:
-            inputlist = inputlist[1:]
-
-        index = 0
-        list_length = len(inputlist)
-        flag_name = None
-        while index < len(inputlist):
-            found_active_flag = False
-            for map in command.available_flags:
-                if inputlist[index] == map["longf"]:
-                    found_active_flag = True
-                    flag_name = inputlist[index]
-                    break
-                if inputlist[index] == map["shortf"]:
-                    found_active_flag = True
-                    flag_name = inputlist[index]
-                    break
-
-            if found_active_flag:
-                input_value = None
-                if map["input"] > FLAG_INPUT_IGNORE:
-                    if (index + 1 >= list_length):
-                        type = "string"
-                        if map["input"] == FLAG_INPUT_STR:
-                            type = "str"
-                        elif map["input"] == FLAG_INPUT_INT:
-                            type = "int"
-                        elif map["input"] == FLAG_INPUT_FLOAT:
-                            type = "float"
-                        raise InputError("Missing input for flag '%s'. Expecting %s ",
-                                flag_name, type)
-
-                    index += 1
-                    if map["input"] == FLAG_INPUT_STR:
-                        input_value = str(inputlist[index])
-                    elif map["input"] == FLAG_INPUT_INT:
-                        try:
-                            input_value = int(inputlist[index])
-                        except ValueError as e:
-                            raise InputError("Invalid input '%s' for flag '%s'. Expected int",
-                                    inputlist[index], flag_name)
-                    elif map["input"] == FLAG_INPUT_FLOAT:
-                        try:
-                            input_value = float(inputlist[index])
-                        except ValueError as e:
-                            raise InputError("Invalid input '%s' for flag '%s'. Expected float",
-                                    inputlist[index], flag_name)
-
-                flag_dict = {'longf':map["longf"], 'description':map["description"],
-                        'input':input_value, 'method':map["method"]}
-                #Sanity check if we are to add this flag dict or not: May already be present
-                for added_dict in self.active_flags:
-                    if added_dict["longf"] == flag_dict["longf"]:
-                        self.active_flags.remove(added_dict)
-                        break
-                self.active_flags.append(flag_dict)
-            else:
-                self.additional_args.append(inputlist[index])
-            index += 1
-
 class Command(object):
     """Class to hold all vital information about a spesific command,
     with its defined flags etc
@@ -803,6 +682,131 @@ class Console(Display_Information):
 
     def _dummy(self):
         pass
+
+
+
+
+class _Console_Parser(object):
+    """Internal
+    """
+    def __init__(self):
+        """
+        Internal structure help parse either a list of strings or a string.
+        The string will be broken into tokens. The list will remove the first element
+        if it equals sys.argv[0] (the program name).
+
+        Modules:
+            sys
+
+        Raises:
+            TypeError
+        """
+        import sys
+        self.program_name = sys.argv[0]    #sys.argv[0]
+        self.active_flags = None
+        self.additional_args = None
+
+    def _precheck_input(self, input):
+        """Sanity check input, always ordering it to a list of arguments without program name
+        """
+        if isinstance(input, list):
+            if input[0] == self.program_name:
+                return input[1:]
+            else:
+                return input
+        if isinstance(input, str):
+            return input.split()
+
+        raise TypeError("Input is not of type 'str' or 'list'")
+
+    def get_active_flags(self):
+        """*getter* function to retrieve all active flags.
+        Returns:
+            - None if no command is parsed with :meth:`parse_line`
+            - Empty list ([]) if no flags where present for last parsed line.
+            - List filled with dictionaries, {'longf':(str), 'description':(str), 'input':(),
+              'method':(callable method)}
+        """
+        return self.active_flags
+
+    def get_additional_args(self):
+        """*getter* function to retrieve all additional arguments.
+        Returns:
+            - None if no command is parsed with :meth:`parse_line`
+            - Emptry list ([]) if no additional arguments where present last parsed line.
+            - List filled with all unaccounted for arguments (eg, did not match any flags (and
+              their required input) from :class:`Command` defined with :meth:`Command.add_flag`
+              (which is used by :meth:`Console.add_flag`)).
+        """
+        return self.additional_args
+
+    def parse_line(self, command, input, is_command=True):
+        """input can be either string or a list
+        """
+        self.active_flags = []
+        self.additional_args = []
+        inputlist = self._precheck_input(input)
+
+        if is_command:
+            inputlist = inputlist[1:]
+
+        index = 0
+        list_length = len(inputlist)
+        flag_name = None
+        while index < len(inputlist):
+            found_active_flag = False
+            for map in command.available_flags:
+                if inputlist[index] == map["longf"]:
+                    found_active_flag = True
+                    flag_name = inputlist[index]
+                    break
+                if inputlist[index] == map["shortf"]:
+                    found_active_flag = True
+                    flag_name = inputlist[index]
+                    break
+
+            if found_active_flag:
+                input_value = None
+                if map["input"] > FLAG_INPUT_IGNORE:
+                    if (index + 1 >= list_length):
+                        type = "string"
+                        if map["input"] == FLAG_INPUT_STR:
+                            type = "str"
+                        elif map["input"] == FLAG_INPUT_INT:
+                            type = "int"
+                        elif map["input"] == FLAG_INPUT_FLOAT:
+                            type = "float"
+                        raise InputError("Missing input for flag '%s'. Expecting %s ",
+                                flag_name, type)
+
+                    index += 1
+                    if map["input"] == FLAG_INPUT_STR:
+                        input_value = str(inputlist[index])
+                    elif map["input"] == FLAG_INPUT_INT:
+                        try:
+                            input_value = int(inputlist[index])
+                        except ValueError as e:
+                            raise InputError("Invalid input '%s' for flag '%s'. Expected int",
+                                    inputlist[index], flag_name)
+                    elif map["input"] == FLAG_INPUT_FLOAT:
+                        try:
+                            input_value = float(inputlist[index])
+                        except ValueError as e:
+                            raise InputError("Invalid input '%s' for flag '%s'. Expected float",
+                                    inputlist[index], flag_name)
+
+                flag_dict = {'longf':map["longf"], 'description':map["description"],
+                        'input':input_value, 'method':map["method"]}
+                #Sanity check if we are to add this flag dict or not: May already be present
+                for added_dict in self.active_flags:
+                    if added_dict["longf"] == flag_dict["longf"]:
+                        self.active_flags.remove(added_dict)
+                        break
+                self.active_flags.append(flag_dict)
+            else:
+                self.additional_args.append(inputlist[index])
+            index += 1
+
 
 class _Print_Help_Command:
     """Assist class to pretty print command flags to the terminal
