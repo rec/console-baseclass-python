@@ -25,6 +25,12 @@ FLAG_INPUT_STR = 1
 FLAG_INPUT_INT = 2
 FLAG_INPUT_FLOAT = 3
 
+STR_FLAG_INPUT_IGNORE = "ignore"
+STR_FLAG_INPUT_STR = "str"
+STR_FLAG_INPUT_INT = "int"
+STR_FLAG_INPUT_FLOAT = "float"
+
+
 class InputError(Exception):
     """Exception raised when terminal input does not match expected input,
     eg. flag --example require an integer input(FLAG_INPUT_INT), but a string is supplied.
@@ -51,22 +57,26 @@ class Display_Information(object):
     When a call is made to one of these methods, they will determine where to relay the message
     based on their settings. The message can be routed to STDOUT, logfile or be ignored.
     """
-    def __init__(self, DI_settings=None, log_fd=None, log_filename=None):
+    def __init__(self, DI_settings=None):
         """
         Kwargs:
-            - DI_settings (dict): Determine where to route information relayed to respective
-              calls. Expected keys are *'verbose'*, *'debug'* and *'verbosedebug'*. If additional
-              keys are present, they will be ignored.
-              Expected values are the DI flags
+            - DI_settings (dict): Holds all settings available for this class.
+              The settings can be viewed as two parts, one which determine where to route
+              information relayed to respective calls.
+              Expected keys for the relay of information are *'verbose'*, *'debug'* and
+              *'verbosedebug'*. Expected values are the DI flags
                 0. **DI_IGNORE** Call has no effect.
                 1. **DI_STDOUT** Message will be sent to STDOUT.
                 2. **DI_LOG** Message will be sent to logfile.
                 3. **DI_STDOUT_LOG** Message will be sent to both STDOUT and logfile
               Default behaviour is to **DI_IGNORE** everything.
-            - log_fd (file): File descriptor that will be used to append log messages.
-              If no file descriptor is supplied, one will be created at initialization.
-            - log_filename (string): Prefix in log filename. Has no effect if log_fd is supplied.
-              Default name is 'CONSOLE'.
+              Expected keys for additional settigs are *'log_fd'* and *'log_filename'*.
+              Expected values for keys are
+                - *'log_fd'*: **file** descriptor that will be used to append log messages.
+                  If no file descriptor is supplied, one will be created at initialization.
+                - *'log_filename'*: **str** prefix in log filename. Has no effect if log_fd
+                  is supplied. Default name is 'CONSOLE'.
+              If additional keys are present, they will be ignored.
 
         Attribute:
             - self.fd (file): Holds filedescriptor to logfile
@@ -74,18 +84,33 @@ class Display_Information(object):
               Identical to the expected structure of supplied argument DI_settings.
 
         Expected DI_settings would look something like:
-        {'v':DI_STDOUT, 'd':DI_LOG, 'vd':DI_STDOUT_LOG}
+        {'v':DI_STDOUT, 'd':DI_LOG, 'vd':DI_STDOUT_LOG, 'log_fd':(file), 'log_filename':(str)}
 
         Raises:
             OSError, TypeError, AttributeError
         """
-
+        """
+        Internal Attributes:
+            - self._init_completed (bool): Is utilized to sanity check calls to the
+              information relay functions. This variable is initialized upon class init.
+              If the information relay functions are called before initialization a CallError
+              exception is raised. (May/will be convient in derived classes where this class
+              has yet to be initialized)
+        """
+        self.display_information_settings = {}
+        log_fd = None
+        log_filename = None
         try:
             os.makedirs('logs')
         except OSError as exception:
             if exception.errno != errno.EEXIST:
                 raise
 
+
+        if "log_fd" in DI_settings:
+            log_fd = DI_settings["log_fd"]
+        if "log_filename" in DI_settings:
+            log_filename = DI_settings["log_filename"]
         if log_fd:
             if not isinstance(log_fd, file):
                 raise TypeError("Invalid argument 'log_fd'. Must be of type 'file'")
@@ -95,6 +120,7 @@ class Display_Information(object):
                 filename = "CONSOLE"
             else:
                 filename = log_filename
+            self.display_information_settings['log_filename'] = filename
 
             filename += "["+str(time.asctime())+"]"
             try:
@@ -102,10 +128,10 @@ class Display_Information(object):
             except:
                 print "ERROR: [Display_Information: __init__] Failed to open logfile: "+filename
                 raise
+        self.display_information_settings['log_fd'] = self.fd
 
         #Create delimiters for all supported settings, initializing them to false
         supported_settings = ['verbose', 'debug', 'verbosedebug']
-        self.display_information_settings = {}
         for setting in supported_settings:
             self.display_information_settings[setting] = DI_IGNORE
 
@@ -126,6 +152,8 @@ class Display_Information(object):
 
                 self.display_information_settings[setting] = DI_level
 
+        self._init_completed = True
+
     def __clean__(self):
         """Cleanup resources allocated within this object.
         """
@@ -142,6 +170,7 @@ class Display_Information(object):
             - *args (): Arguments will be supplied to identifiers in *format* in-order.
         No sanity check is performed on relation between identifier and supplied argument.
         """
+        self._assistant_is_initialized()
         tmp = format % args
         display = "%s\n" % tmp
         self._assistant_information_relay(display, self.display_information_settings['verbose'])
@@ -155,6 +184,7 @@ class Display_Information(object):
             - *args (): Arguments will be supplied to identifiers in *format* in-order.
         No sanity check is performed on relation between identifier and supplied argument.
         """
+        self._assistant_is_initialized()
         display = self._assistant_debug(format, *args)
         self._assistant_information_relay(display, self.display_information_settings['debug'])
 
@@ -167,9 +197,18 @@ class Display_Information(object):
             - *args (): Arguments will be supplied to identifiers in *format* in-order.
         No sanity check is performed on relation between identifier and supplied argument.
         """
+        self._assistant_is_initialized()
         display = self._assistant_debug(format, *args)
         self._assistant_information_relay(display,
                 self.display_information_settings['verbosedebug'])
+
+    def _assistant_is_initialized(self):
+        """Hack? to check if class is initialized. A CallError exception is raised if
+        initialization is not completed.
+        """
+        if hasattr(self, '_init_completed'):
+            return
+        raise CallError("Display_Information not initialized. Programming Error.")
 
     def _assistant_debug(self, format, *args):
         """Perform the formating of our message for the debug calls (debug / vdebug).
@@ -321,13 +360,15 @@ class Command(object):
     with its defined flags etc
     """
 
-    def __init__(self, command_name, method, description):
+    def __init__(self, command_name, method, description, usage=""):
         """
         Args:
             - command_name (str): Name used in console to call upon this method.
             - method (callable method): Called upon when 'command_name' is entered into the
               running console.
             - description (str): Description of what the command does.
+            - usage (str): Description of expected (additional non-flag) arguments. Appended
+              after *'Usage: self.command_name [--flag] '*.
 
         Attributes:
             - self.command_name (str): Name of command.
@@ -337,7 +378,7 @@ class Command(object):
             - self.usage (str): Description of expected (additional) arguments custom for
               this particular command. Eg. *"path_to_dir(str) max_open_files(int)"*. This will
               be appended after *'Usage: self.command_name [--flags] '*
-            - self.PHC (object _Print_Help_Command): Assistant class to print all help options.
+            - self.PHC (_Print_Help_Command object): Assistant class to print all help options.
 
         The *available_flags* attribute dictionary is formated as follows:
         {'longf':{'shortf':(str), 'description:(str), 'input':(), 'method':(callable method)}}
@@ -359,7 +400,7 @@ class Command(object):
         self.usage = ""
         self.PHC = _Print_Help_Command(self)
 
-        self.add_flag(longf="--help", shortf="-h", description="Display available flag options",
+        self.add_flag(longf="help", shortf="h", description="Display available flag options",
                 method=self._command_help)
 
 
@@ -381,6 +422,13 @@ class Command(object):
         if input != None and not isinstance(input, int):
             raise TypeError("'input' argument is not a integer")
 
+        if longf[:2] != "--":
+            longf = "--"+longf
+        if shortf != None and shortf[0] != '-':
+            shortf = '-'+shortf
+        if shortf != None and len(shortf) != 2:
+            raise TypeError("'shortf' argument must be in form 'x' or '-x'")
+
         flag_dict = {'longf':longf, 'shortf':shortf, 'description':description,
                 'input':input,'method':method}
         self.available_flags.append(flag_dict)
@@ -397,16 +445,57 @@ class Console(Display_Information):
     """
     long ass rant
     """
-    def __init__(self, disable_default_flags=False, disable_auto_process_flags=False):
+    def __init__(self, DI_settings={}, disable_default_flags=False, disable_auto_process_flags=False):
         """
         Kwargs:
+            - DI_settings (dict): May contain any of the key-value pairs parsed by
+              :class:`Display_Information`. These values are overridden by terminal flags.
+              This option can be utilized in the event that several *Display_Information* instances
+              would like to log to the same file/outputlevel etc. These settings is stored
+              in the (inheritted) attribute *self.display_information_settings* dictionary
+              that contain information output level, log file descriptor and file prefix name.
+
             - disable_default_flags (bool): Determines whether or not all the default flags should
               be added to the terminal. If enabled (by default) the :class:`Display_Information`
               information methods will be fully available. If not, they will be disabled(Will
               be initialized to DI_IGNORE) and flags removed from terminal flag list.
-            - disable_auto_process_flags (bool): Determines whether or not the Console init should
-              parse terminal flags. If disabled, :class:`Display_Information` is left uninitialized
-              and :meth:`process_flag_options`must be called manually.
+
+            - disable_auto_process_flags (bool): Determines whether or not the Console
+              initialization should parse terminal flags.
+              If disabled, :class:`Display_Information` is left uninitialized
+              and :meth:`terminal_process_flags` must be called manually. This option is
+              convient if one wishes to utilize :meth:`terminal_quickadd_flags` without overriding
+              :meth:`console_init` or does not require the full features of
+              :meth:`terminal_add_flag`.
+
+        Attributes (public):
+            - self.terminal (Command object): Special case :class:`Command` object to represent
+              the *terminal*.
+            - self.terminal_active_flags (list): List of all flags matching available flags
+              present on the *terminal* at program launch. Each list item is a dictionary on the
+              form:
+              {'longf':(str), 'description':(str), 'input':(int), 'method':(callable)}
+              where *longf* is the unique flag identifier.
+            - self.terminal_additional_args (list): List of all unaccounted for arguments on
+              the *terminal* line at program launch.
+
+        Attributes available in :class:`Command` activation handler method and
+        :meth:`default_flag_handler`/supplied flag activation handler method:
+            - self.current_command_active_flags (list): List of all flags matching available flags
+              present at the *console* command launch. Each list item is a dictionary on the form:
+              {'longf':(str), 'description':(str), 'input':(int), 'method':(callable)} where
+              longf is the unique flag identifier.
+            - self.current_command_additional_args (list): List of all unaccounted for arguments
+              on the *console* command line.
+            - self.current_command_name (str): Name of the command that activated this method.
+
+        Attributes available in :meth:`default_flag_handler`/supplied flag activation handler
+        method:
+            - self.current_flag_name (str): Name of the flag (*longf*) that activated this method.
+            - self.current_flag_input (): If flag option required input, this variable will hold
+              that object converted to its intended object type (eg. *int* or *float*). If no
+              option is expected, this attribute will be None.
+
 
         Modules:
             sys
@@ -414,13 +503,34 @@ class Console(Display_Information):
         Raises:
             InputError, TypeError, OSError, AttributeError
         """
+        """This docstring is not parsed by Sphinx.
+
+        Private Attributes:
+            - self._available_commands (list): List of all Command objects that is added to the
+              *console*.
+            - self._processed_flag_options (bool): Indicates whether or not the
+              self._terminal_process_flags() function has been called. In other words, whether or
+              not the terminal flags has been parsed and Display_Information has been initialized.
+            - self._DI_settings (dict): Internal variable to pass initialized Display_Information
+              settings through internal class methods. Holds the value of Console initialization
+              parameter DI_settings.
+        """
+
         import sys
 
-        self.available_commands = []
-        self.terminal = []
+        if not isinstance(DI_settings, dict):
+            raise AttributeError("DI_settings not of type 'dict'")
+        if not isinstance(disable_default_flags, bool):
+            raise AttributeError("disable_default_flags not of type 'bool'")
+        if not isinstance(disable_auto_process_flags, bool):
+            raise AttributeError("disable_auto_process_flags not of type 'bool'")
+
+        self._available_commands = []
+        self.terminal = None
         self.terminal_active_flags = []
         self.terminal_additional_args = []
-        self.processed_flag_options = False
+        self._processed_flag_options = False
+        self._DI_settings = DI_settings
         #Attributes available in flag/command supplied methods
         self.current_command_active_flags = []
         self.current_command_additional_args = []
@@ -435,17 +545,63 @@ class Console(Display_Information):
         self.console_init()
 
         if not disable_auto_process_flags:
-            self._process_flag_options()
+            self._terminal_process_flags()
 
                 #Add default commands
-        self.add_command("exit", self._dummy, "Exit the console.")
-        self.add_command("help", self._console_help, "Print all available commands.")
+        self.console_add_command("exit", self._dummy, "Exit the console.")
+        self.console_add_command("help", self._console_help, "Print all available commands.")
+
+    def default_flag_handler(self):
+        """Default flag handler invoked when no method is supplied to the flag option.
+        This method functions for both the terminal and the console.
+        Override this function if you want to handle all flags in one method.
+
+        Available attributes:
+            - self.current_command_active_flags (list): List of dictionaries holding all present
+              flags when invoking this command.
+            - self.current_command_additional_args (list): List of string objects, all unaccounted
+              for tokens invoking this command.
+            - self.current_command_name (str): *Command.command_name* that was invoked with
+              the flag that called this method. For the terminal, this value is 'TERMINAL'.
+            - self.current_flag_name (str): *longf* that called this method.
+            - self.current_flag_input (): None if flag require no input. Object is converted to
+              its expected object.
+        """
+        flag = self.current_flag_name
+        self.debug("Executing flag '%s' default method handler. Input is '%s'", flag,
+                str(self.current_flag_input))
+
+    def console_init(self):
+        """Called before terminal args are parsed. This allows for custom flags to be
+        added by overriding this method. Add flag options by calling
+        :meth:`Console.terminal_add_flag`.
+
+        If Console is initialized with disable_auto_process_flags, you can add the flags
+        after initialization and manually call :meth:`terminal_process_flags`. Be warned:
+        :class:`Display_Information` is not initialized until flags are processed.
+        """
+        self.terminal.add_flag("--test", input=FLAG_INPUT_FLOAT)
+
+
+    def console_add_command(self, name, method, description, usage=""):
+        """Creates a new in-console command.
+
+        In order to add flag options to this newly created command, use :meth:`Command.add_flag`
+        method on the returned object.
+
+        Returns:
+            :class:`Command`
+        """
+
+        command = Command(name, method, description, usage)
+        self._available_commands.append(command)
+        return command
 
     def terminal_add_flag(self, longf, shortf=None, description="", input=FLAG_INPUT_IGNORE, method=None):
         """
         Add a flag option to the terminal.
 
-        args:
+        Args:
             - longf (str): *long* flag name with two leading dashes used to indicate
               the activation of this flag option.
         Kwargs:
@@ -463,76 +619,114 @@ class Console(Display_Information):
                 3. **FLAG_INPUT_FLOAT** *float* input is expected.
             - method (callable method): If present, this method will be executed once the
               flag option is present.
-        """
-        self.terminal.add_flag(longf, shortf, description, input, method)
-
-    def terminal_quickadd_opts(self, longf_list, shortf_str=None):
-        """Quick and dirty way to add terminal flags,
-        The list of longf is composed of strings formated in the following way:
-        "longflagname". If the flag expects input, it is followed by a "=(o)" where o is either
-            - f for FLAG_INPUT_FLOAT expects float
-            - s for FLAG_INPUT_STR expects string
-            - i for FLAG_INPUT_INT Expects integer
-
-        eg
-        self.terminal_quickadd_opts(["test=(f)", "myflag", "myint=(i)"], "?fi")
-        would produce the flags:
-            - --test [float]
-            - -f --myflag
-            - -i --myint [int]
-        """
-        raise NotImplementedError
-
-    def add_command(self, name, method, description):
-        """
-        """
-        return
-        raise NotImplementedError
-
-    def console_init(self):
-        """Called before terminal args are parsed. This allows for custom flags to be
-        added by overriding this method. Add flag options by calling
-        :meth:`Console.terminal_add_flag`.
-
-        If Console is initialized with disable_auto_process_flags, you can add the flags
-        after initialization and manually call :meth:`process_flag_options`. Be warned:
-        :class:`Display_Information` is not initialized until flags are processed.
-        """
-        self.terminal.add_flag("--test", input=FLAG_INPUT_FLOAT)
-
-    def console_default_flag_handler(self):
-        """Default flag handler invoked when no method is supplied.
-        Override this function if you want to handle all flags in one method.
-
-        Available attributes:
-            - self.current_command_active_flags (list): List of dictionaries holding all present
-              flags when invoking this command.
-            - self.current_command_additional_args (list): List of string objects, all unaccounted
-              for tokens invoking this command.
-            - self.current_command_name (str): *Command.command_name* that was invoked with
-              the flag that called this method. For the terminal, this value is 'TERMINAL'.
-            - self.current_flag_name (str): *longf* that called this method.
-            - self.current_flag_input (): None if flag require no input. Object is converted to
-              its expected object.
-        """
-        flag = self.current_flag_name
-        if flag == "--test":
-            print "in test flag handler lolol"
-
-    def process_flag_options(self):
-        """Attempts to process terminal flag options and initialize :class:`Display_Information`.
-        This will fail if terminal flags have been parsed and initialized.
 
         Raises:
             CallError
         """
-        if self.processed_flag_options:
-            str = "Terminal has already parsed flag inputs. If you ment to call this method you" \
-                " probably need to initialize Console with disable_auto_process_flags"
-            raise CallError(str)
-        self._process_flag_options()
+        if self._processed_flag_options:
+            raise CallError("Programming Error: Attempting to add a terminal flag after terminal "
+                    "flags have been parsed. Adding terminal flags must be done within overidden "
+                    "method console_init or Console must be initialized with "
+                    "disable_auto_process_flags set to True. See documentation.")
 
-    def _process_flag_options(self):
+        self.terminal.add_flag(longf, shortf, description, input, method)
+
+    def terminal_quickadd_flags(self, longf_list, shortf_str=None):
+        """
+        Quick and dirty way to add terminal flags. Utilizeable in two cases:
+            1. :meth:`console_init`
+            2. If :meth:`Console` is initialized with *disable_auto_process_flags*, than this
+               method can be called upon the :class:`Console` object and followed by a call to
+               the parsing function :meth:`terminal_process_flags` when all flag options are
+               added.
+
+        Args:
+            - longf_list (list): All list items must be of type 'string'. Each item correponds
+              to one flag entry. The list item takes the form *"longflag=option"*, where
+              *'longflag'* is the flag name and *'option'* is the input type.
+                * *"ignore"* for **FLAG_INPUT_IGNORE**. This option *'=ignore'* may be left out of
+                  string, as it is the default option. Eg. string only needs to be *"longflag"*.
+                * *"float"* for **FLAG_INPUT_FLOAT**
+                * *"str"* for **FLAG_INPUT_STR**
+                * *"int"* for **FLAG_INPUT_INT**
+        Kwargs:
+            - shortf_str (str): a string of characters, at most *n* characters long where *n*
+              is the number of list items in *'longf_list'*. Each characters represents
+              the correponding longf **in-order** of apperance. If no short flag is desired, a
+              questionmark (?) will place no short flag for the associated flag.
+              Eg. "rs?o" would correspond to atleast 4 flags, but only 3 of them are assigned
+              a short flag.
+
+        No description will be given for the flag, and the :meth:`default_flag_handler` will
+        be assigned as its activation method.
+
+        Example:
+            self.terminal_quickadd_opts(["radius=float", "show", "circles=int", "file"], "r?c")
+        would produce the flags:
+            - -r --radius [float]
+            - --show
+            - -c --circles [int]
+            - --file
+
+        .. note::
+            This method should **ONLY** be utilized in the above mentioned cases. Failure to do
+            so will result in an **CallError** exception.
+
+        Raises:
+            AttributeError, CallError
+        """
+        if not isinstance(longf_list, list):
+            raise AttributeError("Argument 'longf_list' is not of type 'list'")
+        if shortf_str and not isinstance(shortf_str, str):
+            raise AttributeError("Argument 'shortf_str' is not of type 'string'")
+
+        shortf_list = [None for x in xrange(len(longf_list))]
+        if shortf_str != None:
+            for i in xrange(len(shortf_str)):
+                if shortf_str[i] != '?':
+                    shortf_list[i] = shortf_str[i]
+        i = 0
+        for flag_string in longf_list:
+            if not isinstance(flag_string, str):
+                err_str = "List item in argument 'longf_list' is not of type 'string'"
+                raise AttributeError(err_str)
+
+            flag_list = flag_string.split("=")
+            input_type = FLAG_INPUT_IGNORE
+            if len(flag_list) == 2:
+                option = flag_list[1].lower()
+                if option == STR_FLAG_INPUT_STR:
+                    input_type = FLAG_INPUT_STR
+                elif option == STR_FLAG_INPUT_INT:
+                    input_type = FLAG_INPUT_INT
+                elif option == STR_FLAG_INPUT_FLOAT:
+                    input_type = FLAG_INPUT_FLOAT
+
+            self.terminal_add_flag(flag_list[0], shortf_list[i], input=input_type)
+            i += 1
+
+    def terminal_process_flags(self):
+        """Attempts to process terminal flag options and initialize :class:`Display_Information`.
+        This will fail if terminal flags have already been processed. This method is
+        automatically called internally if :class:`Console` initialization parameter
+        *disable_auto_process_flags* is not set.
+
+        .. note::
+            This method should **ONLY** be called when :class:`Console` is initialized with
+            *disable_auto_process_flags*. If called after terminal flags have been processed,
+            a **CallError** will be raised. Simailary if called twise.
+
+
+        Raises:
+            CallError
+        """
+        if self._processed_flag_options:
+            raise CallError("Programming Error: Terminal has already parsed flag inputs. "
+                "If you ment to call this method you probably need to initialize Console with "
+                "disable_auto_process_flags")
+        self._terminal_process_flags()
+
+    def _terminal_process_flags(self):
         """
         Process the terminal input line and execute the methods associated with present flags
 
@@ -540,7 +734,7 @@ class Console(Display_Information):
             sys
         """
         import sys
-        self.processed_flag_options = True
+        self._processed_flag_options = True
 
         parser = _Console_Parser()
         parser.parse_line(self.terminal, sys.argv, False)
@@ -548,32 +742,33 @@ class Console(Display_Information):
         self.terminal_additional_args = parser.get_additional_args()
 
         do_exit = False
+        exit_map = None
         log_level = DI_STDOUT
-        DI_settings = {}
         for map in self.terminal_active_flags:
             flag = map["longf"]
             if flag == "--help":
+                exit_map = map
                 do_exit = True
             elif flag == "--log":
                 log_level = DI_LOG
             elif flag == "--log-stdout":
                 log_level = DI_STDOUT_LOG
             elif flag == "--verbose":
-                DI_settings["verbose"] = DI_STDOUT
+                self._DI_settings["verbose"] = DI_STDOUT
             elif flag == "--debug":
-                DI_settings["debug"] = DI_STDOUT
+                self._DI_settings["debug"] = DI_STDOUT
             elif flag == "--verbose-debug":
-                DI_settings["debug"] = DI_STDOUT
-                DI_settings["verbosedebug"] = DI_STDOUT
+                self._DI_settings["debug"] = DI_STDOUT
+                self._DI_settings["verbosedebug"] = DI_STDOUT
 
         if do_exit:
-            map["method"]()
+            exit_map["method"]()
             sys.exit()
 
         #Update Display_Information settings to newest possible level
-        for (key, value) in DI_settings.items():
-            DI_settings[key] = log_level
-        Display_Information.__init__(self, DI_settings)
+        for (key, value) in self._DI_settings.items():
+            self._DI_settings[key] = log_level
+        Display_Information.__init__(self, self._DI_settings)
 
         #Call flags in order of apperance in string
         self.current_command_name = "TERMINAL"
@@ -583,7 +778,7 @@ class Console(Display_Information):
             self.current_flag_name = map["longf"]
             self.current_flag_input = map["input"]
             if map["method"] == None:
-                self.console_default_flag_handler()
+                self.default_flag_handler()
             else:
                 map["method"]()
 
@@ -817,5 +1012,4 @@ class Terminal_Size:
         return int(cr[1]), int(cr[0])
 
 if __name__ == '__main__':
-    c = Console(False)
-    c.process_flag_options()
+    c = Console({}, False, False)
