@@ -6,15 +6,18 @@
 
 """
 
-import os
 import errno
 import time
+import threading
 
 #Flag definitions for Display_Information
 DI_IGNORE = 0
 DI_STDOUT = 1
 DI_LOG = 2
 DI_STDOUT_LOG = 3
+
+DI_CONSOLE_IGNORE = 0
+DI_CONSOLE_INHERIT = 1
 
 DI_MIN_FLAG_LEVEL = DI_IGNORE
 DI_MAX_FLAG_LEVEL = DI_STDOUT_LOG
@@ -88,6 +91,9 @@ class Display_Information(object):
 
         Raises:
             OSError, TypeError, AttributeError
+
+        Modules:
+            os
         """
         """
         Internal Attributes:
@@ -97,6 +103,8 @@ class Display_Information(object):
               exception is raised. (May/will be convient in derived classes where this class
               has yet to be initialized)
         """
+        import os
+
         self.display_information_settings = {}
         log_fd = None
         log_filename = None
@@ -344,7 +352,7 @@ class Console(Display_Information):
               If disabled, :class:`Display_Information` is left uninitialized
               and :meth:`terminal_process_flags` must be called manually. This option is
               convient if one wishes to utilize :meth:`terminal_quickadd_flags` without overriding
-              :meth:`console_init` or does not require the full features of
+              :meth:`terminal_init` or does not require the full features of
               :meth:`terminal_add_flag`.
 
         Attributes (public):
@@ -421,7 +429,7 @@ class Console(Display_Information):
         self.terminal = Command(sys.argv[0], self._dummy, "Terminal - represents startup.")
         if not disable_default_flags:
             self._add_default_flags()
-        self.console_init()
+        self.terminal_init()
 
         if not disable_auto_process_flags:
             self._terminal_process_flags()
@@ -450,17 +458,32 @@ class Console(Display_Information):
         self.debug("Executing flag '%s' default method handler. Input is '%s'", flag,
                 str(self.current_flag_input))
 
-    def console_init(self):
-        """Called before terminal args are parsed. This allows for custom flags to be
-        added by overriding this method. Add flag options by calling
-        :meth:`Console.terminal_add_flag`.
-
-        If Console is initialized with disable_auto_process_flags, you can add the flags
-        after initialization and manually call :meth:`terminal_process_flags`. Be warned:
-        :class:`Display_Information` is not initialized until flags are processed.
+    def console_cleanup(self):
+        """Method is called when the in-program console initiated by :meth:`console_start`
+        is terminating. Override this method to cleanup anything you may require.
         """
-        self.terminal.add_flag("--test", input=FLAG_INPUT_FLOAT)
+        pass
 
+    def console_start(self, threaded=True, daemon=True):
+        """Start the in-program console. This will run in the terminal where the program
+        was initiated.
+
+        Kwargs:
+            - threaded (bool): Determine whether or not to start the console in a seperate thread.
+              Doing so will continiue execution after this method is called.
+            - daemon (bool): Determine whether or not the console running in a thread should
+              behave like a daemon. A daemon operates just like a normal thread, but when the
+              MainThread seizes execution, this thread will to. This option has no effect if
+              the *threaded* argument is False.
+        """
+
+        program_console = Console_Program(self, self.console_cleanup,
+                self.display_information_settings, threaded)
+        if threaded:
+            program_console.daemon = daemon
+            program_console.start()
+        else:
+            program_console.run()
 
     def console_add_command(self, name, method, description, usage=""):
         """Creates a new in-console command.
@@ -475,6 +498,17 @@ class Console(Display_Information):
         command = Command(name, method, description, usage)
         self._available_commands.append(command)
         return command
+
+    def terminal_init(self):
+        """Called before terminal args are parsed. This allows for custom flags to be
+        added by overriding this method. Add flag options by calling
+        :meth:`Console.terminal_add_flag`.
+
+        If Console is initialized with disable_auto_process_flags, you can add the flags
+        after initialization and manually call :meth:`terminal_process_flags`. Be warned:
+        :class:`Display_Information` is not initialized until flags are processed.
+        """
+        self.terminal.add_flag("--test", input=FLAG_INPUT_FLOAT)
 
     def terminal_add_flag(self, longf, shortf=None, description="", input=FLAG_INPUT_IGNORE, method=None):
         """
@@ -505,7 +539,7 @@ class Console(Display_Information):
         if self._processed_flag_options:
             raise CallError("Programming Error: Attempting to add a terminal flag after terminal "
                     "flags have been parsed. Adding terminal flags must be done within overidden "
-                    "method console_init or Console must be initialized with "
+                    "method terminal_init or Console must be initialized with "
                     "disable_auto_process_flags set to True. See documentation.")
 
         self.terminal.add_flag(longf, shortf, description, input, method)
@@ -513,7 +547,7 @@ class Console(Display_Information):
     def terminal_quickadd_flags(self, longf_list, shortf_str=None):
         """
         Quick and dirty way to add terminal flags. Utilizeable in two cases:
-            1. :meth:`console_init`
+            1. :meth:`terminal_init`
             2. If :meth:`Console` is initialized with *disable_auto_process_flags*, than this
                method can be called upon the :class:`Console` object and followed by a call to
                the parsing function :meth:`terminal_process_flags` when all flag options are
@@ -674,17 +708,133 @@ class Console(Display_Information):
         self.terminal.add_flag("--verbose-debug", "-D",
                 "Print detailed debug information in program flow to STDOUT.")
 
-    def _console_help(self, flags):
+    def _console_help(self):
         """Print all available commands from the console
         """
         print "IN CONSOLE HELP"
-        print flags
 
     def _dummy(self):
         pass
 
+class Console_Program(threading.Thread, Display_Information):
+    """
+        Implements the in-program console loop.
 
+        Parameters
+        ----------
+        @console_object             REQUIRED:
+                                        OBJECT of class @Console. Pass along
+                                            the instance of the console
+        @cleanup                    OPTIONAL: default=None
+                                        METHOD callable called when console
+                                            terminates console activity.
+        @settings                   OPTIONAL: Default=None
+                                        DICTIONARY @_INFORMATION_SETTINGS
+        @is_thread                  OPTIONAL: Default=True
+                                        BOOL telling wheter or not this console
+                                        is running as a thread or mainthread.
 
+        Attributes
+        ----------
+        @self.console               OBJECT instance of @Console class.
+                                        Equals @console_object.
+        @self.cleanup               METHOD callable. Equals @cleanup.
+    """
+
+    def __init__(self, console_object, cleanup=None, DI_console_settings=DI_CONSOLE_IGNORE, is_thread=True):
+        """
+            Initialize the in-program console
+            DI_CONSOLE_IGNORE
+            DI_CONSOLE_INHERIT
+
+        Raises:
+            TypeError, AttributeError
+        """
+
+        if is_thread:
+            threading.Thread.__init__(self)
+
+        if isinstance(console_object, Console) == False:
+            raise TypeError("Input object is not instance of class Console")
+        if hasattr(cleanup, '__call__'):
+            self.cleanup = cleanup
+        else:
+            self.cleanup = None
+        self.console = console_object
+
+        DI_init = None
+        if isinstance(DI_console_settings, int):
+            if DI_console_settings == DI_CONSOLE_IGNORE:
+                DI_init = None
+            elif DI_console_settings == DI_CONSOLE_INHERIT:
+                DI_init = self.console.display_information_settings
+            else:
+                raise AttributeError("Argument 'DI_console_settings' integer flag values are "
+                        "out of bounds. No valid flag.")
+        elif isinstance(DI_console_settings, dict):
+            DI_init = DI_console_settings
+        else:
+            raise TypeError("Argument 'DI_console_settings' is not of supported input types: "
+                    "'int'(flags) or 'dict'")
+
+        Display_Information.__init__(self, DI_init)
+
+    def run(self):
+        """thread
+        """
+
+        do_loop = True
+        parser = _Console_Parser()
+
+        while do_loop:
+            try:
+                input_string = raw_input("\n # ")
+                input_list = input_string.split()
+                if len(input_list) <= 0:
+                    continue
+
+                command_found = False
+                for command in self.console._available_commands:
+                    if command.command_name == input_list[0]:
+                        command_found = True
+                        parser.parse_line(command, input_string)
+                        break
+
+                if command_found:
+                    self.console.command_active_flags = parser.get_active_flags()
+                    self.console.command_additional_args = parser.get_additional_args()
+                    self.console.command_name = command.command_name
+
+                    do_exit = False
+                    for map in self.console.command_active_flags:
+                        if map["longf"] == "--help":
+                            do_exit = True
+                            break
+                    if do_exit:
+                        map["method"]()
+                        continue
+
+                    for map in self.console.command_active_flags:
+                        self.console.current_flag_input = map['input']
+                        self.console.current_flag_name = map['longf']
+                        map['method']()
+
+                    command.method()
+                    if input_list[0] == "exit":
+                        do_loop = False
+
+                else:
+                    print "Unknown command '%s'. Type 'help' for available commands." % input_list[0]
+                    continue
+
+            except (KeyboardInterrupt, SystemExit):
+                if hasattr(self.cleanup, '__call__'):
+                    self.cleanup()
+                self.verbose("Terminating console due to system exception.")
+                raise SystemExit
+
+            if hasattr(self.cleanup, '__call__'):
+                self.cleanup()
 
 class _Console_Parser(object):
     """Internal
@@ -1017,3 +1167,4 @@ class Terminal_Size:
 
 if __name__ == '__main__':
     c = Console({}, False, False)
+    c.console_start(True, False)
