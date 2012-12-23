@@ -33,6 +33,22 @@ STR_FLAG_INPUT_STR = "str"
 STR_FLAG_INPUT_INT = "int"
 STR_FLAG_INPUT_FLOAT = "float"
 
+class Enum(set):
+    """Implements a pythonic way to enumerate items to strings.
+    Usage: ANIMAL = Enum(["DOG", "CAT"])
+    results in a call to ANIMAL.DOG equals "DOG".
+    """
+    def __getattr__(self, name):
+        if name in self:
+            return name
+        raise AttributeError
+
+"""
+All supported keyboard comparisons
+"""
+KEY = Enum(["ARROW_UP", "ARROW_DOWN", "ARROW_LEFT", "ARROW_RIGHT", "ENTER", "BACKSPACE",
+        "END_OF_TEXT", "END_OF_TRANSMISSION"])
+
 
 class InputError(Exception):
     """Exception raised when terminal input does not match expected input,
@@ -836,6 +852,130 @@ class Console_Program(threading.Thread, Display_Information):
             if hasattr(self.cleanup, '__call__'):
                 self.cleanup()
 
+
+class Terminal_Manipulator(object):
+    """todo
+    """
+    def __init__(self):
+        """todo
+        """
+        self._getch = None
+        self._getch_init()
+
+    def _getch_init(self):
+        try:
+            import msvcrt
+            self._getch = self._getch_windows
+        except ImportError:
+            pass
+
+        try:
+            import Carbon
+            Carbon.Evt  #If attribute is present, its a mac
+            self._getch = self._getch_mac
+        except ImportError, AttributeError:
+            pass
+
+        self._getch = self._getch_linux
+
+    def is_key(self, key, compare):
+        """Compare the string input key (typically fetched raw from the keyboard stdin) if it
+        is a match to intended compare keyboard key. The compare string is a defined string like
+        "ARROW_UP" whilst the raw key input counterpart is ANSI escaped sequence.
+        The comparison is done with both hex and octal string value for the ASCII *ESC* value.
+
+        Args:
+            - key (str): A string object holding to key input we wish to compare.
+            - compare (str): Item in the **KEY** :meth:`Enum` set. Eg. KEY.KEY_TO_COMPARE.
+              See all available **KEY** members.
+
+        Returns:
+            - **True** if raw input key equals the **KEY** literal
+            - **False** if it doesnt.
+        """
+
+        if compare == KEY.ARROW_UP:
+            if key == '\x1b[A' or key == '\033[A':
+                return True
+        elif compare == KEY.ARROW_DOWN:
+            if key == '\x1b[B' or key == '\033[B':
+                return True
+        elif compare == KEY.ARROW_LEFT:
+            if key == '\x1b[D' or key == '\033[D':
+                return True
+        elif compare == KEY.ARROW_RIGHT:
+            if key == '\x1b[C' or key == '\033[D':
+                return True
+        elif compare == KEY.BACKSPACE:
+            if key == '\x7f' or key == '\0177':
+                return True
+        elif compare == KEY.ENTER:
+            if key == '\r':
+                return True
+        elif compare == KEY.END_OF_TEXT:
+            if key == '\x03' or key == '\003':
+                return True
+        elif compare == KEY.END_OF_TRANSMISSION:
+            if key == '\x04' or key == '\004':
+                return True
+        else:
+            return False
+
+    def clear_terminal(self):
+        """Clear the terminal with a sys stdout ANSI escape sequence write
+        """
+        import sys
+        sys.stdout.write("\x27[2J")
+
+    def move_cursor_back(self, n):
+        """Move the cursor back n characters by writing a ANSI escape sequence to stdout
+        """
+        import sys
+        if isinstance(n, int):
+            ch = str(n)
+        string = "\x27["+ch+"D"
+        sys.stdout.write(string)
+
+    def move_cursor_forward(self, n):
+        """Move the cursor forward n characters by writing a ANSI escape sequence to stdout
+        """
+        import sys
+        if isinstance(n, int):
+            ch = str(n)
+        string = "\x27["+ch+"D"
+        sys.stdout.write(string)
+
+    def getch(self):
+        """
+        """
+        ch = self._getch()
+        if ord(ch) == 27:   #decimal value for the ASCII ESC value
+            #must get 2 more chars!
+            a = self._getch()
+            b = self._getch()
+            ch += a + b
+        return ch
+
+    def _getch_windows(self):
+        import msvcrt
+        print "WINDOWS GETCH EVENT HANDLER"
+        raise NotImplementedError
+
+    def _getch_linux(self):
+        import sys, tty, termios
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(sys.stdin.fileno())
+            ch = sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        return ch
+
+    def _getch_mac(self):
+        print "MAC GETCH EVENT HANDLER"
+        raise NotImplementedError
+
 class _Console_Parser(object):
     """Internal
     """
@@ -1167,4 +1307,8 @@ class Terminal_Size:
 
 if __name__ == '__main__':
     c = Console({}, False, False)
-    c.console_start(True, False)
+#    c.console_start(True, False)
+    t = Terminal_Manipulator()
+    ch = t.getch()
+    if t.is_key(ch, KEY.ARROW_UP):
+        print "Arrow up"
