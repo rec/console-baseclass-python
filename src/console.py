@@ -141,17 +141,13 @@ class Display_Information(object):
             self.fd = log_fd
         else:
             if log_filename == None:
-                filename = "CONSOLE"
+                self.filename = "CONSOLE"
             else:
-                filename = log_filename
-            self.display_information_settings['log_filename'] = filename
+                self.filename = log_filename
+            self.display_information_settings['log_filename'] = self.filename
 
-            filename += "["+str(time.asctime())+"]"
-            try:
-                self.fd = open('./logs/'+filename, 'w')
-            except:
-                print "ERROR: [Display_Information: __init__] Failed to open logfile: "+filename
-                raise
+            self.filename += "["+str(time.asctime())+"]"
+            self.fd = None  #Open it at runtime
         self.display_information_settings['log_fd'] = self.fd
 
         #Create delimiters for all supported settings, initializing them to false
@@ -178,7 +174,7 @@ class Display_Information(object):
 
         self._init_completed = True
 
-    def __clean__(self):
+    def clean(self):
         """Cleanup resources allocated within this object.
         """
         if self.fd:
@@ -256,6 +252,13 @@ class Display_Information(object):
             sys.stdout.write(msg)
 
         if DI_level == DI_LOG or DI_level == DI_STDOUT_LOG:
+            if self.fd == None:
+                try:
+                    self.fd = open('./logs/'+self.filename, 'w')
+                except:
+                    print "ERROR: [Display_Information: __init__] Failed to open logfile: "+filename
+                    raise
+                self.display_information_settings['log_fd'] = self.fd
             self.fd.write(msg)
 
 class Command(object):
@@ -670,6 +673,17 @@ class Console(Display_Information):
         self.terminal_active_flags = parser.get_active_flags()
         self.terminal_additional_args = parser.get_additional_args()
 
+
+        def _update_active_DI(level):
+            for map in self.terminal_active_flags:
+                flag = map["longf"]
+                if flag == "--verbose":
+                    self._DI_settings["verbose"] = level
+                elif flag == "--debug":
+                    self._DI_settings["debug"] = level
+                elif flag == "--verbose-debug":
+                    self._DI_settings["verbosedebug"] = level
+
         do_exit = False
         exit_map = None
         log_level = DI_STDOUT
@@ -679,9 +693,9 @@ class Console(Display_Information):
                 exit_map = map
                 do_exit = True
             elif flag == "--log":
-                log_level = DI_LOG
+                _update_active_DI(DI_LOG)
             elif flag == "--log-stdout":
-                log_level = DI_STDOUT_LOG
+                _update_active_DI(DI_STDOUT_LOG)
             elif flag == "--verbose":
                 self._DI_settings["verbose"] = DI_STDOUT
             elif flag == "--debug":
@@ -694,9 +708,6 @@ class Console(Display_Information):
             exit_map["method"]()
             sys.exit()
 
-        #Update Display_Information settings to newest possible level
-        for (key, value) in self._DI_settings.items():
-            self._DI_settings[key] = log_level
         Display_Information.__init__(self, self._DI_settings)
 
         #Call flags in order of apperance in string
@@ -798,15 +809,18 @@ class Console_Program(threading.Thread, Display_Information):
     def run(self):
         """thread
         """
+        import sys
 
         do_loop = True
         parser = _Console_Parser()
 
         while do_loop:
             try:
-                input_string = raw_input("\n # ")
+                CI = Console_Input(self.console.display_information_settings)
+                input_string = CI.get_input(" # ")
                 input_list = input_string.split()
                 if len(input_list) <= 0:
+
                     continue
 
                 command_found = False
@@ -840,21 +854,116 @@ class Console_Program(threading.Thread, Display_Information):
                         do_loop = False
 
                 else:
-                    print "Unknown command '%s'. Type 'help' for available commands." % input_list[0]
-                    continue
+                    string = "\nUnknown command '%s'. Type 'help' for available "\
+                            "commands." % input_list[0]
+                    sys.stdout.write(string)
 
             except (KeyboardInterrupt, SystemExit):
                 if hasattr(self.cleanup, '__call__'):
                     self.cleanup()
                 self.verbose("Terminating console due to system exception.")
                 raise SystemExit
+            except:
+                self.console.clean() # TMP CODE: FIX
+                raise
 
             if hasattr(self.cleanup, '__call__'):
                 self.cleanup()
 
+class Console_Input(Display_Information):
+    """
+        en.wikipedia.org/wiki/ANSI_escape_code
+    """
+    def __init__(self, DI_settings=None):
+        Display_Information.__init__(self, DI_settings)
+        self.history = []
+        self.input_buffer = []
+        self.input_index = 0
+        self.TM = Terminal_Manipulator()
+        self.TS = Terminal_Size()
+        self.input_spanning_rows = 0
+        self.last_column = 0
+
+        self.start_column = None
+        self.start_row = None
+        self.start_height = None
+
+    def erase_terminal_print(self):
+        import sys
+
+        self.TS.refresh()
+        (curr_r, curr_c) = self.TM.get_cursor()
+        height_diff = curr_r - (self.start_row + (self.TS.height - self.start_height))
+        self.debug("Curr_r : %d. sr: %d. sh: %d. height: %d", curr_r, self.start_row,
+                self.start_height, self.TS.height)
+        self.debug("Height diff: %d", height_diff)
+        i = 0
+        while i < height_diff:
+            self.TM.clear_line()
+            i += 1
+            self.TM.move_cursor_up()
+            print "lol"
+            self.debug("Cleared one line and moved up")
+        return
+
+        #Restore to old cursor pos
+        esc_string = "\033["+str(self.start_row + height_diff)+";"+str(self.start_column)+"H"
+        sys.stdout.write(esc_string)
+        sys.stdout.write("\033[1K")     #Erase from start of line to cursor
+
+    def get_input(self, prompt=""):
+        """TODO
+        """
+        import sys
+
+        self.TS.refresh()
+        self.start_height = self.TS.height
+        (r, c) = self.TM.get_cursor()
+        self.start_row = r
+        self.start_column = c
+
+        sys.stdout.write(prompt)
+        self.last_column = 0
+        while True:
+            char = self.TM.getch()
+
+            if self.TM.is_key(char, KEY.ARROW_UP):
+                (r, c) = self.TM.get_cursor()
+                self.debug("Row: %d", r)
+                continue
+            elif self.TM.is_key(char, KEY.ARROW_DOWN):
+                sys.stdout.write("\r")
+                continue
+            elif self.TM.is_key(char, KEY.ARROW_LEFT):
+                raise NotImplementedError
+            elif self.TM.is_key(char, KEY.ARROW_RIGHT):
+                raise NotImplementedError
+            elif self.TM.is_key(char, KEY.END_OF_TEXT):
+                raise NotImplementedError
+            elif self.TM.is_key(char, KEY.END_OF_TRANSMISSION):
+                raise NotImplementedError
+            elif self.TM.is_key(char, KEY.BACKSPACE):
+                self.erase_terminal_print()
+             #   sys.stdout.write(prompt)
+              #  sys.stdout.write("".join(self.input_buffer))
+                continue
+            elif self.TM.is_key(char, KEY.ENTER):
+                return "".join(self.input_buffer)
+            else:
+                self.input_buffer.insert(self.input_index, char)
+                self.input_index += 1
+
+            sys.stdout.write(char)
+            (curr_r, curr_c) = self.TM.get_cursor()
+            if curr_c < self.last_column
+                self.last_column = 0
+                self.spanning_rows += 1
+
+
 
 class Terminal_Manipulator(object):
-    """todo
+    """
+
     """
     def __init__(self):
         """todo
@@ -921,40 +1030,112 @@ class Terminal_Manipulator(object):
         else:
             return False
 
+
+    def scroll_up(self, n='1'):
+        """Scroll current terminal line up n lines. Using a sys stdout ANSI escape sequence write
+        """
+        import sys
+        string = "\033["+n+"S"
+        sys.stdout.write(string)
+
+    def scroll_down(self, n='1'):
+        """Scroll current terminal line down n lines. Using a sys stdout ANSI escape sequence write
+        """
+        import sys
+        string = "\033["+n+"T"
+        sys.stdout.write(string)
+
+    def clear_line(self):
+        """Clear current terminal line with a sys stdout ANSI escape sequence write
+        """
+        import sys
+        sys.stdout.write('\033[2K')
+
     def clear_terminal(self):
         """Clear the terminal with a sys stdout ANSI escape sequence write
         """
         import sys
-        sys.stdout.write("\x27[2J")
+        sys.stdout.write("\033[2J")
+        sys.stdout.write("\033[1;1H")
 
     def move_cursor_back(self, n):
         """Move the cursor back n characters by writing a ANSI escape sequence to stdout
         """
         import sys
+        ch = n
         if isinstance(n, int):
             ch = str(n)
-        string = "\x27["+ch+"D"
+        string = "\033["+ch+"D"
         sys.stdout.write(string)
 
     def move_cursor_forward(self, n):
         """Move the cursor forward n characters by writing a ANSI escape sequence to stdout
         """
         import sys
+        ch = n
         if isinstance(n, int):
             ch = str(n)
-        string = "\x27["+ch+"D"
+        string = "\033["+ch+"C"
         sys.stdout.write(string)
+
+    def move_cursor_up(self, n):
+        """Move the cursor up n lines by writing a ANSI escape sequence to stdout.
+        """
+        import sys
+        ch = n
+        if isinstance(n, int):
+            ch = str(n)
+        string = "\033["+ch+"A"
+        sys.stdout.write(string)
+
+    def get_cursor(self):
+        """Perform device status report to retrieve cursor pos
+        Return:
+            - (row, column) tuple
+        """
+        import sys
+        sys.stdout.write("\033[6n")
+        while True:
+            ch = self.getch()
+            if len(ch) == 0:
+                raise ValueError("Failed to retrieve device status report. Returning ESC "\
+                        "sequence was lost.")
+            if ch[0] == "\x1b" or ch[0] == "\033":
+                if ch[-1] == 'R':
+                    #Identifier for return call from the Device Status Report
+                    break
+
+        row_string = ""
+        column_string = ""
+        index = 2
+        while True:
+            if ch[index] == ';':
+                index += 1
+                break
+            row_string += ch[index]
+            index += 1
+        while True:
+            if ch[index] == 'R':
+                break
+            column_string += ch[index]
+            index += 1
+
+        return (int(row_string), int(column_string))
+
 
     def getch(self):
         """
         """
-        ch = self._getch()
-        if ord(ch) == 27:   #decimal value for the ASCII ESC value
-            #must get 2 more chars!
-            a = self._getch()
-            b = self._getch()
-            ch += a + b
-        return ch
+        sequence = self._getch()
+        if ord(sequence) == 27:   #decimal value for the ASCII ESC value
+            sequence += self._getch()
+            while True:
+                ch = self._getch()
+                sequence += ch
+                if ord(ch) < 0x7e and ord(ch) > 0x40:
+                    #Range of valid final byte in the escape sequence. Indicates the last byte
+                    break
+        return sequence
 
     def _getch_windows(self):
         import msvcrt
@@ -1173,7 +1354,7 @@ class _Print_Help_Command:
             print line
 
 
-class Terminal_Size:
+class Terminal_Size(object):
     """Return the terminal size. Works on Windows, Linux, OS X, Cygwin
     """
     def __init__(self):
@@ -1306,9 +1487,5 @@ class Terminal_Size:
         return int(cr[1]), int(cr[0])
 
 if __name__ == '__main__':
-    c = Console({}, False, False)
-#    c.console_start(True, False)
-    t = Terminal_Manipulator()
-    ch = t.getch()
-    if t.is_key(ch, KEY.ARROW_UP):
-        print "Arrow up"
+    c = Console({'debug':DI_LOG}, False, False)
+    c.console_start(True, False)
