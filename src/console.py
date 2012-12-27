@@ -891,7 +891,11 @@ class Console_Input(Display_Information):
     def erase_terminal_print(self):
         import sys
 
-        self.TS.refresh()
+        if self.TS.refresh():
+            #Terminal size is changed. All perviosuly stored start variables
+            #may now be corrupted. Recalculate
+            pass
+
         (curr_r, curr_c) = self.TM.get_cursor()
         height_diff = curr_r - (self.start_row + (self.TS.height - self.start_height))
         self.debug("Curr_r : %d. sr: %d. sh: %d. height: %d", curr_r, self.start_row,
@@ -911,10 +915,22 @@ class Console_Input(Display_Information):
         sys.stdout.write(esc_string)
         sys.stdout.write("\033[1K")     #Erase from start of line to cursor
 
+
+        """Taught process. cases:
+
+        - Cursor is at bottom of terminal: Unchanged size. No height difference.
+
+        - Cursor in middle of terminal.Unchanged size. Height difference
+
+        - Cursor in middle of termina. Changed size. Height difference and invalidating
+          spanning_rows
+        """
+
     def get_input(self, prompt=""):
         """TODO
         """
         import sys
+        import tty, termios
 
         self.TS.refresh()
         self.start_height = self.TS.height
@@ -924,8 +940,14 @@ class Console_Input(Display_Information):
 
         sys.stdout.write(prompt)
         self.last_column = 0
+        self.spanning_rows = 0
         while True:
-            char = self.TM.getch()
+            while True:
+                if self.TM.key_pressed():
+                    char = self.TM.getch()
+                    print "got ", [char]
+                    break
+            continue
 
             if self.TM.is_key(char, KEY.ARROW_UP):
                 (r, c) = self.TM.get_cursor()
@@ -933,7 +955,8 @@ class Console_Input(Display_Information):
                 continue
             elif self.TM.is_key(char, KEY.ARROW_DOWN):
                 sys.stdout.write("\r")
-                continue
+                print self.spanning_rows
+                break
             elif self.TM.is_key(char, KEY.ARROW_LEFT):
                 raise NotImplementedError
             elif self.TM.is_key(char, KEY.ARROW_RIGHT):
@@ -955,10 +978,9 @@ class Console_Input(Display_Information):
 
             sys.stdout.write(char)
             (curr_r, curr_c) = self.TM.get_cursor()
-            if curr_c < self.last_column
-                self.last_column = 0
+            if curr_c < self.last_column:
                 self.spanning_rows += 1
-
+            self.last_column = curr_c
 
 
 class Terminal_Manipulator(object):
@@ -969,12 +991,15 @@ class Terminal_Manipulator(object):
         """todo
         """
         self._getch = None
+        self.key_pressed = None
         self._getch_init()
 
     def _getch_init(self):
         try:
+            #Is Windows
             import msvcrt
             self._getch = self._getch_windows
+            self.key_pressed = self._key_pressed_windows
         except ImportError:
             pass
 
@@ -982,10 +1007,12 @@ class Terminal_Manipulator(object):
             import Carbon
             Carbon.Evt  #If attribute is present, its a mac
             self._getch = self._getch_mac
+            self.key_pressed = self._key_pressed_linux #UNTESTED - MUST TEST
         except ImportError, AttributeError:
             pass
 
         self._getch = self._getch_linux
+        self.key_pressed = self._key_pressed_linux
 
     def is_key(self, key, compare):
         """Compare the string input key (typically fetched raw from the keyboard stdin) if it
@@ -1029,7 +1056,22 @@ class Terminal_Manipulator(object):
                 return True
         else:
             return False
+    def _key_pressed_linux(self):
+        """NOT A VIABLE WAY! TOO LAGGY INPUT. INPUT LOST
+        """
+        import select, sys, termios, tty
 
+        #save old settings
+        old_settings = termios.tcgetattr(sys.stdin)
+        #set terminal in raw
+        tty.setcbreak(sys.stdin.fileno())
+        input = select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+        return input
+
+    def _key_pressed_windows(self):
+        import msvcrt
+        return msvcrt.kbhit()
 
     def scroll_up(self, n='1'):
         """Scroll current terminal line up n lines. Using a sys stdout ANSI escape sequence write
@@ -1121,6 +1163,7 @@ class Terminal_Manipulator(object):
             index += 1
 
         return (int(row_string), int(column_string))
+
 
 
     def getch(self):
