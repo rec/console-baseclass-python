@@ -1,0 +1,2 @@
+The Display_Information methods to append a log message to file may not be entirely thread safe.
+
