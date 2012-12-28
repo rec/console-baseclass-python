@@ -58,6 +58,10 @@ class Display_Information(object):
         - :meth:`vdebug` used to notify user with detailed debug information.
     When a call is made to one of these methods, they will determine where to relay the message
     based on their settings. The message can be routed to STDOUT, logfile or be ignored.
+
+    If the message is sent to a logfile, the file will be opened for append, and closed after
+    the message has been written to it. Thus, IOError may be raised by a call to any of the
+    information relay methods.
     """
     def __init__(self, DI_settings=None):
         """
@@ -249,8 +253,9 @@ class Display_Information(object):
                 f.write(msg)
 
 class Command(object):
-    """Class to hold all vital information about a spesific command,
-    with its defined flags etc
+    """Object represents a command. It holds a list of flags associated with this command,
+    a description of what this command does and a method supplied at initialization
+    that is ment to be executed when this Command is submitted.
     """
 
     def __init__(self, command_name, method, description, usage=""):
@@ -271,7 +276,8 @@ class Command(object):
             - self.usage (str): Description of expected (additional) arguments custom for
               this particular command. Eg. *"path_to_dir(str) max_open_files(int)"*. This will
               be appended after *'Usage: self.command_name [--flags] '*
-            - self.PHC (_Print_Help_Command object): Assistant class to print all help options.
+
+        The '--help' flag is automatically added at initialization.
 
         The *available_flags* attribute dictionary is formated as follows:
         {'longf':{'shortf':(str), 'description:(str), 'input':(), 'method':(callable method)}}
@@ -279,6 +285,10 @@ class Command(object):
 
         Raises:
             TypeError
+        """
+        """
+        Private Attributes
+            - self._PHC (_Print_Help_Command object): Assistant class to print all help options.
         """
         if hasattr(method, '__call__') == False:
             raise TypeError("'method' argument is not a callable")
@@ -291,7 +301,7 @@ class Command(object):
         self.description = description
         self.available_flags = []
         self.usage = ""
-        self.PHC = _Print_Help_Command(self)
+        self._PHC = _Print_Help_Command(self)
 
         self.add_flag(longf="help", shortf="h", description="Display available flag options",
                 method=self._command_help)
@@ -332,11 +342,52 @@ class Command(object):
             Internal command called whenever the HELP flag is
             issued for a command
         """
-        self.PHC.print_flags()
+        self._PHC.print_flags()
 
 class Console(Display_Information):
-    """
-    long ass rant
+    """Class to derive from. This class offers two main functionalities, both decoupled from
+    eachother.
+
+    Terminal Flag Handler
+    *********************
+    A simple initialization of your derived class will parse and execute(by default) all flags
+    (defined) present on the terminal at program start(through the sys.argv attribute).
+    Override :meth:`terminal_init` to add custom flags to your program
+    at startup. Each flag may be associated with a method to be executed when the flag is
+    present. Each flag may also expect an input of any sort(string, integer or float) available
+    within the method flag handler. If no method is supplied, the default
+    :meth:`default_flag_handler` is called. Override this to handle all flags in one place
+    by defaut.
+
+    There are two main ways to add flags:
+        1. Through :meth:`terminal_add_flag` inside the derived :meth:`terminal_init`.
+           The derived class is than called with the default init arguments.
+        2. :meth:`terminal_quickadd_flags` let you quickly enter a list of flags that may have
+           shortcut values aswell. No description is used. The default flag handler is
+           executed when present.
+           .. note::
+                This method may not be called after initialization IF *disable_auto_process_flags*
+                is set to False. A CallError will be raised if so.
+                This parameter must be True, and after quickadd call is
+                successful the :meth:`process_terminal_flags` method must be called to
+                manually activate the processing of terminal flags.
+                Alternativly this option may be used within the :meth:`terminal_init` instead.
+
+    In-program Console
+    ******************
+    A console-like program letting you define custom commands that execute supplied methods
+    when entered in the console. Each command may have associated
+    flags(and their flag handler methods). This option closely related to the *cmd* module,
+    but this module offers in addition the ability to associate flags, inputs and running the
+    console as a thread(and daemon).
+
+    All commands must be added with :meth:`console_add_command` and be called before the console
+    is started with :meth:`console_start`.
+
+    Flags are identified by their *longf* name, and all flags are required to have one.
+    Long flags (*longf*) are identified by two leading dashes. The shortcut one character option
+    with one leading dash is optional.
+    All flags (in both usages) are parsed and executed in order of apperance left to right.
     """
     def __init__(self, DI_settings={}, disable_default_flags=False, disable_auto_process_flags=False):
         """
@@ -346,7 +397,7 @@ class Console(Display_Information):
               This option can be utilized in the event that several *Display_Information* instances
               would like to log to the same file/outputlevel etc. These settings is stored
               in the (inheritted) attribute *self.display_information_settings* dictionary
-              that contain information output level, log file descriptor and file prefix name.
+              that contain information output level, log filename and log filename prefix.
 
             - disable_default_flags (bool): Determines whether or not all the default flags should
               be added to the terminal. If enabled (by default) the :class:`Display_Information`
@@ -934,7 +985,7 @@ class _Console_Parser(object):
         index = 0
         list_length = len(inputlist)
         flag_name = None
-        while index < len(inputlist):
+        while index < list_length:
             found_active_flag = False
             for map in command.available_flags:
                 if inputlist[index] == map["longf"]:
