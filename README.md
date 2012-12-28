@@ -27,7 +27,7 @@ Documentation
 
 The documentation for the implementation and usage of this module is
 available at
-https://vladwow91.github.com/console-baseclass-python
+vladwow91.github.com/console-baseclass-python
 
 
 Contact
