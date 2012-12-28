@@ -301,7 +301,7 @@ class Command(object):
         self.description = description
         self.available_flags = []
         self.usage = ""
-        self._PHC = _Print_Help_Command(self)
+        self._PHC = _Print_Help_Console(self)
 
         self.add_flag(longf="help", shortf="h", description="Display available flag options",
                 method=self._command_help)
@@ -342,14 +342,14 @@ class Command(object):
             Internal command called whenever the HELP flag is
             issued for a command
         """
-        self._PHC.print_flags()
+        self._PHC.print_help(self, True)
 
 class Console(Display_Information):
     """Class to derive from. This class offers two main functionalities, both decoupled from
     eachother.
 
-    Terminal Flag Handler
-    *********************
+    **Terminal Flag Handler**
+
     A simple initialization of your derived class will parse and execute(by default) all flags
     (defined) present on the terminal at program start(through the sys.argv attribute).
     Override :meth:`terminal_init` to add custom flags to your program
@@ -359,22 +359,27 @@ class Console(Display_Information):
     :meth:`default_flag_handler` is called. Override this to handle all flags in one place
     by defaut.
 
+    The flags are either processed automatically after :meth:`terminal_init` has finished,
+    or not processed at all until :meth:`terminal_process_flags` is called manually if
+    *disable_auto_process_flags* is set.
+
+    Flags are identified by their *longf* name, and all flags are required to have one.
+    Long flags (*longf*) are identified by two leading dashes. The shortcut one character option
+    with one leading dash is optional.
+    All flags (in both usages) are parsed and executed in order of apperance left to right.
+
     There are two main ways to add flags:
         1. Through :meth:`terminal_add_flag` inside the derived :meth:`terminal_init`.
            The derived class is than called with the default init arguments.
         2. :meth:`terminal_quickadd_flags` let you quickly enter a list of flags that may have
            shortcut values aswell. No description is used. The default flag handler is
            executed when present.
-           .. note::
-                This method may not be called after initialization IF *disable_auto_process_flags*
-                is set to False. A CallError will be raised if so.
-                This parameter must be True, and after quickadd call is
-                successful the :meth:`process_terminal_flags` method must be called to
-                manually activate the processing of terminal flags.
-                Alternativly this option may be used within the :meth:`terminal_init` instead.
+           .. note:
+            This method may not be called after initialization IF *disable_auto_process_flags*
+            is set to False. A CallError will be raised if so.
 
-    In-program Console
-    ******************
+    **In-program Console**
+
     A console-like program letting you define custom commands that execute supplied methods
     when entered in the console. Each command may have associated
     flags(and their flag handler methods). This option closely related to the *cmd* module,
@@ -383,11 +388,6 @@ class Console(Display_Information):
 
     All commands must be added with :meth:`console_add_command` and be called before the console
     is started with :meth:`console_start`.
-
-    Flags are identified by their *longf* name, and all flags are required to have one.
-    Long flags (*longf*) are identified by two leading dashes. The shortcut one character option
-    with one leading dash is optional.
-    All flags (in both usages) are parsed and executed in order of apperance left to right.
     """
     def __init__(self, DI_settings={}, disable_default_flags=False, disable_auto_process_flags=False):
         """
@@ -789,42 +789,29 @@ class Console(Display_Information):
     def _console_help(self):
         """Print all available commands from the console
         """
-        print_help = _Print_Help_Terminal(self._available_commands)
-        print_help.print_commands()
+
+        print_help = _Print_Help_Console(self)
+        print_help.print_help(self._available_commands, False)
 
     def _dummy(self):
         pass
 
 class Console_Program(threading.Thread, Display_Information):
+    """Implements the in-program console loop
     """
-        Implements the in-program console loop.
-
-        Parameters
-        ----------
-        @console_object             REQUIRED:
-                                        OBJECT of class @Console. Pass along
-                                            the instance of the console
-        @cleanup                    OPTIONAL: default=None
-                                        METHOD callable called when console
-                                            terminates console activity.
-        @settings                   OPTIONAL: Default=None
-                                        DICTIONARY @_INFORMATION_SETTINGS
-        @is_thread                  OPTIONAL: Default=True
-                                        BOOL telling wheter or not this console
-                                        is running as a thread or mainthread.
-
-        Attributes
-        ----------
-        @self.console               OBJECT instance of @Console class.
-                                        Equals @console_object.
-        @self.cleanup               METHOD callable. Equals @cleanup.
-    """
-
     def __init__(self, console_object, DI_console_settings=DI_CONSOLE_IGNORE, is_thread=True):
         """
-            Initialize the in-program console
-            DI_CONSOLE_IGNORE
-            DI_CONSOLE_INHERIT
+        Args:
+            - console_object (Console): Reference to the Console object
+
+        Kwargs:
+            - DI_console_settings (): Can be one of these values:
+                * *(dict)* with the original settings needed for :class:`Display_Information`
+                * *(int)* flag
+                    1. **DI_CONSOLE_IGNORE** - Set all settings to *ignore*.
+                    2. **DI_CONSOLE_IHERIT** - Inherit all DI settings from console
+            - is_thread (bool): Determine whether or not the in-program console should start
+              as a thread.
 
         Raises:
             TypeError, AttributeError
@@ -857,7 +844,9 @@ class Console_Program(threading.Thread, Display_Information):
         Display_Information.__init__(self, DI_init)
 
     def run(self):
-        """thread
+        """Method starts the in-program console.
+
+        Not initiated directly, but through :meth:`Console.console_start`
         """
         import sys
         do_loop = True
@@ -1039,69 +1028,34 @@ class _Console_Parser(object):
                 self.additional_args.append(inputlist[index])
             index += 1
 
-class _Print_Help_Terminal(object):
-    """TODO: Merge terminal and command print help
+class _Print_Help_Console(object):
+    """Assist class to pretty print Command flags or all available Commands in the console.
     """
-    def __init__(self, commands_list):
-        self.commands_list = commands_list
+
+    def __init__(self, console):
+        self.console = console
         self.TS = Terminal_Size()
-        self.lineoffset_desc = 0
         self.MIN_DESC_WIDTH = 20
 
-    def _calculate_bounds(self):
-        for command in self.commands_list:
-            length = len(command.command_name)
-            if length > self.lineoffset_desc:
-                self.lineoffset_desc = length
-
-    def print_commands(self):
-        self._calculate_bounds()
-        self.TS.refresh()
-        self.lineoffset_desc += 7 #magic number
-        if (self.TS.width - self.lineoffset_desc) < self.MIN_DESC_WIDTH:
-            print "Unable to write help options due to narrow terminal. Please expand it."
-            tmp = self.lineoffset_desc + self.MIN_DESC_WIDTH
-            print "Current width: %d. Minimum required width: %d" % (self.TS.width, tmp)
-            return
-
-
-        for command in self.commands_list:
-            line = "  "+command.command_name
-            num_padd_chars = self.lineoffset_desc - len(line)
-            line += "".join([" " for x in xrange(num_padd_chars)])
-
-            token_list = command.description.split()
-            line_length = len(line)
-            for token in token_list:
-                token_length = len(token)
-                if line_length + token_length >= self.TS.width:
-                    print line
-                    line = ''.join([' ' for x in xrange(self.lineoffset_desc)])
-                    line_length = self.lineoffset_desc
-                line += token + " "
-                line_length += token_length + 1
-            print line
-
-
-
-class _Print_Help_Command:
-    """Assist class to pretty print command flags to the terminal
-    """
-    def __init__(self, command):
-        self.command = command
-        self.TS = Terminal_Size()
-        self.lineoffset_desc = 0
-        self.MIN_DESC_WIDTH = 20
-
-    def _calculate_bounds(self):
-        """Calculate the line offset at which description begins
+    def _calculate_bounds(self, input, print_flags=True):
         """
-        self.lineoffset_desc = 0
+        Args:
+            - input: Command if print_flags is True. List of commands if not.
+        """
+        offset = 0
 
-        for flag in self.command.available_flags:
-            line = self._get_flags_string(flag)
-            if len(line) > self.lineoffset_desc:
-                self.lineoffset_desc = len(line)
+        if print_flags:
+            for flag in input.available_flags:
+                line = self._get_flags_string(flag)
+                if len(line) > offset:
+                    offset = len(line)
+        else:
+            for command in input:
+                line = len(command.command_name)
+                if line > offset:
+                    offset = line
+
+        return offset
 
     def _get_flags_string(self, flag):
         """Assist function to get flag and input string,
@@ -1123,41 +1077,51 @@ class _Print_Help_Command:
 
         return line
 
-
-    def print_flags(self):
-        """Print all flags for this command to the terminal in the format:
-
-        Usage: program_name [--flags] command.usage
-
-        -f --flag [optiontype]      description
+    def print_help(self, input, print_flags=True):
         """
-        self._calculate_bounds()
+        Args:
+            - input - Command object if print_flags is True. List of available commands if not.
+        """
+        offset = self._calculate_bounds(input, print_flags)
         self.TS.refresh()
-        self.lineoffset_desc += 7
-        if (self.TS.width -self.lineoffset_desc) < self.MIN_DESC_WIDTH:
+        offset += 7         #magic number
+        if (self.TS.width - offset) < self.MIN_DESC_WIDTH:
             print "Unable to write help options due to narrow terminal. Please expand it."
             tmp = self.lineoffset_desc + self.MIN_DESC_WIDTH
             print "Current width: %d. Minimum required width: %d" % (self.TS.width, tmp)
             return
 
-        print "Usage: " + self.command.command_name + " [--flags] " +self.command.usage + "\n"
-        for flag in self.command.available_flags:
-            line = self._get_flags_string(flag)
-            num_padd_chars = self.lineoffset_desc - len(line)
+        usage = ""
+        if print_flags:
+            print_list = input.available_flags
+            usage = "Usage: " + input.command_name + " [--flags] " +input.usage+ "\n"
+        else:
+            print_list = input
+            usage = "Usage: " + self.console.terminal.command_name + " [--flags] " +\
+                self.console.terminal.usage+ "\n"
 
-            line += ''.join([' ' for x in xrange(num_padd_chars)])
-            token_list = flag['description'].split()
+        print usage
+        for item in print_list:
+            if print_flags:
+                line = self._get_flags_string(item)
+                token_list = item['description'].split()
+            else:
+                line = "  " + item.command_name
+                token_list = item.description.split()
+
+            num_padd_chars = offset - len(line)
+            line += "".join([' ' for x in xrange(num_padd_chars)])
             line_length = len(line)
             for token in token_list:
                 token_length = len(token)
                 if line_length + token_length >= self.TS.width:
                     print line
-                    line = ''.join([' ' for x in xrange(self.lineoffset_desc)])
-                    line_length = self.lineoffset_desc
+                    line = ''.join([' ' for x in xrange(offset)])
+                    line_length = offset
                 line += token + " "
                 line_length += token_length + 1
-            print line
-
+            if len(line) > 0:
+                print line
 
 class Terminal_Size(object):
     """Return the terminal size. Works on Windows, Linux, OS X, Cygwin
