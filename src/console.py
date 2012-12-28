@@ -300,7 +300,7 @@ class Command(object):
         self.method = method
         self.description = description
         self.available_flags = []
-        self.usage = ""
+        self.usage = usage
         self._PHC = _Print_Help_Console(self)
 
         self.add_flag(longf="help", shortf="h", description="Display available flag options",
