@@ -1,0 +1,681 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Python Console Baseclass documentation &mdash; console_baseclass_python 1.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="console_baseclass_python 1.0 documentation" href="#" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="#">console_baseclass_python 1.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-console">
+<span id="python-console-baseclass-documentation"></span><h1>Python Console Baseclass documentation<a class="headerlink" href="#module-console" title="Permalink to this headline">¶</a></h1>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Module should be imported by <em>import console</em> to retrieve flags defined in console.py</p>
+</div>
+<div class="section" id="console">
+<h2>Console<a class="headerlink" href="#console" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="console.Console">
+<em class="property">class </em><tt class="descclassname">console.</tt><tt class="descname">Console</tt><big>(</big><em>DI_settings={}</em>, <em>disable_default_flags=False</em>, <em>disable_auto_process_flags=False</em><big>)</big><a class="reference internal" href="_modules/console.html#Console"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#console.Console" title="Permalink to this definition">¶</a></dt>
+<dd><p>Class to derive from. This class offers two main functionalities, both decoupled from
+eachother.</p>
+<p><strong>Terminal Flag Handler</strong></p>
+<p>A simple initialization of your derived class will parse and execute(by default) all flags
+(defined) present on the terminal at program start(through the sys.argv attribute).
+Override <a class="reference internal" href="#console.Console.terminal_init" title="console.Console.terminal_init"><tt class="xref py py-meth docutils literal"><span class="pre">terminal_init()</span></tt></a> to add custom flags to your program
+at startup. Each flag may be associated with a method to be executed when the flag is
+present. Each flag may also expect an input of any sort(string, integer or float) available
+within the method flag handler. If no method is supplied, the default
+<a class="reference internal" href="#console.Console.default_flag_handler" title="console.Console.default_flag_handler"><tt class="xref py py-meth docutils literal"><span class="pre">default_flag_handler()</span></tt></a> is called. Override this to handle all flags in one place
+by defaut.</p>
+<p>The flags are either processed automatically after <a class="reference internal" href="#console.Console.terminal_init" title="console.Console.terminal_init"><tt class="xref py py-meth docutils literal"><span class="pre">terminal_init()</span></tt></a> has finished,
+or not processed at all until <a class="reference internal" href="#console.Console.terminal_process_flags" title="console.Console.terminal_process_flags"><tt class="xref py py-meth docutils literal"><span class="pre">terminal_process_flags()</span></tt></a> is called manually if
+<em>disable_auto_process_flags</em> is set.</p>
+<p>Flags are identified by their <em>longf</em> name, and all flags are required to have one.
+Long flags (<em>longf</em>) are identified by two leading dashes. The shortcut one character option
+with one leading dash is optional.
+All flags (in both usages) are parsed and executed in order of apperance left to right.</p>
+<dl class="docutils">
+<dt>There are two main ways to add flags:</dt>
+<dd><ol class="first last arabic">
+<li><p class="first">Through <a class="reference internal" href="#console.Console.terminal_add_flag" title="console.Console.terminal_add_flag"><tt class="xref py py-meth docutils literal"><span class="pre">terminal_add_flag()</span></tt></a> inside the derived <a class="reference internal" href="#console.Console.terminal_init" title="console.Console.terminal_init"><tt class="xref py py-meth docutils literal"><span class="pre">terminal_init()</span></tt></a>.
+The derived class is than called with the default init arguments.</p>
+</li>
+<li><p class="first"><a class="reference internal" href="#console.Console.terminal_quickadd_flags" title="console.Console.terminal_quickadd_flags"><tt class="xref py py-meth docutils literal"><span class="pre">terminal_quickadd_flags()</span></tt></a> let you quickly enter a list of flags that may have
+shortcut values aswell. No description is used. The default flag handler is
+executed when present.
+.. note:</p>
+<blockquote>
+<div><p>This method may not be called after initialization IF <em>disable_auto_process_flags</em>
+is set to False. A CallError will be raised if so.</p>
+</div></blockquote>
+</li>
+</ol>
+</dd>
+</dl>
+<p><strong>In-program Console</strong></p>
+<p>A console-like program letting you define custom commands that execute supplied methods
+when entered in the console. Each command may have associated
+flags(and their flag handler methods). This option closely related to the <em>cmd</em> module,
+but this module offers in addition the ability to associate flags, inputs and running the
+console as a thread(and daemon).</p>
+<p>All commands must be added with <a class="reference internal" href="#console.Console.console_add_command" title="console.Console.console_add_command"><tt class="xref py py-meth docutils literal"><span class="pre">console_add_command()</span></tt></a> and be called before the console
+is started with <a class="reference internal" href="#console.Console.console_start" title="console.Console.console_start"><tt class="xref py py-meth docutils literal"><span class="pre">console_start()</span></tt></a>.</p>
+<dl class="docutils">
+<dt>Kwargs:</dt>
+<dd><ul class="first last simple">
+<li>DI_settings (dict): May contain any of the key-value pairs parsed by
+<a class="reference internal" href="#console.Display_Information" title="console.Display_Information"><tt class="xref py py-class docutils literal"><span class="pre">Display_Information</span></tt></a>. These values are overridden by terminal flags.
+This option can be utilized in the event that several <em>Display_Information</em> instances
+would like to log to the same file/outputlevel etc. These settings is stored
+in the (inheritted) attribute <em>self.display_information_settings</em> dictionary
+that contain information output level, log filename and log filename prefix.</li>
+<li>disable_default_flags (bool): Determines whether or not all the default flags should
+be added to the terminal. If enabled (by default) the <a class="reference internal" href="#console.Display_Information" title="console.Display_Information"><tt class="xref py py-class docutils literal"><span class="pre">Display_Information</span></tt></a>
+information methods will be fully available. If not, they will be disabled(Will
+be initialized to DI_IGNORE) and flags removed from terminal flag list.</li>
+<li>disable_auto_process_flags (bool): Determines whether or not the Console
+initialization should parse terminal flags.
+If disabled, <a class="reference internal" href="#console.Display_Information" title="console.Display_Information"><tt class="xref py py-class docutils literal"><span class="pre">Display_Information</span></tt></a> is left uninitialized
+and <a class="reference internal" href="#console.Console.terminal_process_flags" title="console.Console.terminal_process_flags"><tt class="xref py py-meth docutils literal"><span class="pre">terminal_process_flags()</span></tt></a> must be called manually. This option is
+convient if one wishes to utilize <a class="reference internal" href="#console.Console.terminal_quickadd_flags" title="console.Console.terminal_quickadd_flags"><tt class="xref py py-meth docutils literal"><span class="pre">terminal_quickadd_flags()</span></tt></a> without overriding
+<a class="reference internal" href="#console.Console.terminal_init" title="console.Console.terminal_init"><tt class="xref py py-meth docutils literal"><span class="pre">terminal_init()</span></tt></a> or does not require the full features of
+<a class="reference internal" href="#console.Console.terminal_add_flag" title="console.Console.terminal_add_flag"><tt class="xref py py-meth docutils literal"><span class="pre">terminal_add_flag()</span></tt></a>.</li>
+</ul>
+</dd>
+<dt>Attributes (public):</dt>
+<dd><ul class="first last simple">
+<li>self.terminal (Command object): Special case <a class="reference internal" href="#console.Command" title="console.Command"><tt class="xref py py-class docutils literal"><span class="pre">Command</span></tt></a> object to represent
+the <em>terminal</em>.</li>
+<li>self.terminal_active_flags (list): List of all flags matching available flags
+present on the <em>terminal</em> at program launch. Each list item is a dictionary on the
+form:
+{&#8216;longf&#8217;:(str), &#8216;description&#8217;:(str), &#8216;input&#8217;:(int), &#8216;method&#8217;:(callable)}
+where <em>longf</em> is the unique flag identifier.</li>
+<li>self.terminal_additional_args (list): List of all unaccounted for arguments on
+the <em>terminal</em> line at program launch.</li>
+</ul>
+</dd>
+</dl>
+<p>Attributes available in <a class="reference internal" href="#console.Command" title="console.Command"><tt class="xref py py-class docutils literal"><span class="pre">Command</span></tt></a> activation handler method and
+<a class="reference internal" href="#console.Console.default_flag_handler" title="console.Console.default_flag_handler"><tt class="xref py py-meth docutils literal"><span class="pre">default_flag_handler()</span></tt></a>/supplied flag activation handler method:</p>
+<blockquote>
+<div><ul class="simple">
+<li>self.current_command_active_flags (list): List of all flags matching available flags
+present at the <em>console</em> command launch. Each list item is a dictionary on the form:
+{&#8216;longf&#8217;:(str), &#8216;description&#8217;:(str), &#8216;input&#8217;:(int), &#8216;method&#8217;:(callable)} where
+longf is the unique flag identifier.</li>
+<li>self.current_command_additional_args (list): List of all unaccounted for arguments
+on the <em>console</em> command line.</li>
+<li>self.current_command_name (str): Name of the command that activated this method.</li>
+</ul>
+</div></blockquote>
+<p>Attributes available in <a class="reference internal" href="#console.Console.default_flag_handler" title="console.Console.default_flag_handler"><tt class="xref py py-meth docutils literal"><span class="pre">default_flag_handler()</span></tt></a>/supplied flag activation handler
+method:</p>
+<blockquote>
+<div><ul class="simple">
+<li>self.current_flag_name (str): Name of the flag (<em>longf</em>) that activated this method.</li>
+<li>self.current_flag_input (): If flag option required input, this variable will hold
+that object converted to its intended object type (eg. <em>int</em> or <em>float</em>). If no
+option is expected, this attribute will be None.</li>
+</ul>
+</div></blockquote>
+<dl class="docutils">
+<dt>Modules:</dt>
+<dd>sys</dd>
+<dt>Raises:</dt>
+<dd>InputError, TypeError, OSError, AttributeError</dd>
+</dl>
+<dl class="method">
+<dt id="console.Console.console_add_command">
+<tt class="descname">console_add_command</tt><big>(</big><em>name</em>, <em>method</em>, <em>description</em>, <em>usage=''</em><big>)</big><a class="reference internal" href="_modules/console.html#Console.console_add_command"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#console.Console.console_add_command" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates a new in-console command.</p>
+<p>In order to add flag options to this newly created command, use <a class="reference internal" href="#console.Command.add_flag" title="console.Command.add_flag"><tt class="xref py py-meth docutils literal"><span class="pre">Command.add_flag()</span></tt></a>
+method on the returned object.</p>
+<dl class="docutils">
+<dt>Returns:</dt>
+<dd><a class="reference internal" href="#console.Command" title="console.Command"><tt class="xref py py-class docutils literal"><span class="pre">Command</span></tt></a></dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="console.Console.console_cleanup">
+<tt class="descname">console_cleanup</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/console.html#Console.console_cleanup"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#console.Console.console_cleanup" title="Permalink to this definition">¶</a></dt>
+<dd><p>Method is called when the in-program console initiated by <a class="reference internal" href="#console.Console.console_start" title="console.Console.console_start"><tt class="xref py py-meth docutils literal"><span class="pre">console_start()</span></tt></a>
+is terminating. Override this method to cleanup anything you may require.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="console.Console.console_start">
+<tt class="descname">console_start</tt><big>(</big><em>threaded=True</em>, <em>daemon=True</em><big>)</big><a class="reference internal" href="_modules/console.html#Console.console_start"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#console.Console.console_start" title="Permalink to this definition">¶</a></dt>
+<dd><p>Start the in-program console. This will run in the terminal where the program
+was initiated.</p>
+<dl class="docutils">
+<dt>Kwargs:</dt>
+<dd><ul class="first last simple">
+<li>threaded (bool): Determine whether or not to start the console in a seperate thread.
+Doing so will continiue execution after this method is called.</li>
+<li>daemon (bool): Determine whether or not the console running in a thread should
+behave like a daemon. A daemon operates just like a normal thread, but when the
+MainThread seizes execution, this thread will to. This option has no effect if
+the <em>threaded</em> argument is False.</li>
+</ul>
+</dd>
+</dl>
+<p>If console is set to be threaded, apply a try catch around the remainder of your program,
+(exluding the call to <em>console_start</em>) catching KeyboardInterrupt. When caught,
+set the event object returned from a threaded call to <em>console_start</em> to set().
+This will terminate the running (nondaemon) thread after the enter key has been struck.
+.. note:</p>
+<div class="highlight-python"><pre>Due to the blocking nature of raw_input, the enter key must be struck for the
+thread to check the status of the shutdown event.</pre>
+</div>
+<dl class="docutils">
+<dt>Returns:</dt>
+<dd><ul class="first last simple">
+<li><em>shutdown</em> threading.Event object if console is a thread.</li>
+<li><em>None</em> if console is not a thread.(Will return when console exits)</li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="console.Console.default_flag_handler">
+<tt class="descname">default_flag_handler</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/console.html#Console.default_flag_handler"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#console.Console.default_flag_handler" title="Permalink to this definition">¶</a></dt>
+<dd><p>Default flag handler invoked when no method is supplied to the flag option.
+This method functions for both the terminal and the console.
+Override this function if you want to handle all flags in one method.</p>
+<dl class="docutils">
+<dt>Available attributes:</dt>
+<dd><ul class="first last simple">
+<li>self.current_command_active_flags (list): List of dictionaries holding all present
+flags when invoking this command.</li>
+<li>self.current_command_additional_args (list): List of string objects, all unaccounted
+for tokens invoking this command.</li>
+<li>self.current_command_name (str): <em>Command.command_name</em> that was invoked with
+the flag that called this method. For the terminal, this value is &#8216;TERMINAL&#8217;.</li>
+<li>self.current_flag_name (str): <em>longf</em> that called this method.</li>
+<li>self.current_flag_input (): None if flag require no input. Object is converted to
+its expected object.</li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="console.Console.terminal_add_flag">
+<tt class="descname">terminal_add_flag</tt><big>(</big><em>longf</em>, <em>shortf=None</em>, <em>description=''</em>, <em>input=0</em>, <em>method=None</em><big>)</big><a class="reference internal" href="_modules/console.html#Console.terminal_add_flag"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#console.Console.terminal_add_flag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a flag option to the terminal.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><ul class="first last simple">
+<li>longf (str): <em>long</em> flag name with two leading dashes used to indicate
+the activation of this flag option.</li>
+</ul>
+</dd>
+<dt>Kwargs:</dt>
+<dd><ul class="first last">
+<li><p class="first">shortf (str): <em>short</em> flag name with one leading dash and only one character,
+used to indicate the activation of this flag. This is a shortcut option of the
+required <strong>longf</strong> argument.</p>
+</li>
+<li><p class="first">description (str): Short description of what this flag does. This information
+is available when the &#8211;help flag is present.</p>
+</li>
+<li><p class="first">input (int): Indicate that this flag option requires additional input directly
+succeeding the flag option. The <em>int</em> value supplied is one of the following
+defined flags:</p>
+<blockquote>
+<div><ol class="arabic simple" start="0">
+<li><strong>FLAG_INPUT_IGNORE</strong> No input is expected. This is the default option.</li>
+<li><strong>FLAG_INPUT_STR</strong> <em>string</em> input is expected.</li>
+<li><strong>FLAG_INPUT_INT</strong> <em>integer</em> input is expected.</li>
+<li><strong>FLAG_INPUT_FLOAT</strong> <em>float</em> input is expected.</li>
+</ol>
+</div></blockquote>
+</li>
+<li><p class="first">method (callable method): If present, this method will be executed once the
+flag option is present.</p>
+</li>
+</ul>
+</dd>
+<dt>Raises:</dt>
+<dd>CallError</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="console.Console.terminal_init">
+<tt class="descname">terminal_init</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/console.html#Console.terminal_init"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#console.Console.terminal_init" title="Permalink to this definition">¶</a></dt>
+<dd><p>Called before terminal args are parsed. This allows for custom flags to be
+added by overriding this method. Add flag options by calling
+<a class="reference internal" href="#console.Console.terminal_add_flag" title="console.Console.terminal_add_flag"><tt class="xref py py-meth docutils literal"><span class="pre">Console.terminal_add_flag()</span></tt></a>.</p>
+<p>If Console is initialized with disable_auto_process_flags, you can add the flags
+after initialization and manually call <a class="reference internal" href="#console.Console.terminal_process_flags" title="console.Console.terminal_process_flags"><tt class="xref py py-meth docutils literal"><span class="pre">terminal_process_flags()</span></tt></a>. Be warned:
+<a class="reference internal" href="#console.Display_Information" title="console.Display_Information"><tt class="xref py py-class docutils literal"><span class="pre">Display_Information</span></tt></a> is not initialized until flags are processed.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="console.Console.terminal_process_flags">
+<tt class="descname">terminal_process_flags</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/console.html#Console.terminal_process_flags"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#console.Console.terminal_process_flags" title="Permalink to this definition">¶</a></dt>
+<dd><p>Attempts to process terminal flag options and initialize <a class="reference internal" href="#console.Display_Information" title="console.Display_Information"><tt class="xref py py-class docutils literal"><span class="pre">Display_Information</span></tt></a>.
+This will fail if terminal flags have already been processed. This method is
+automatically called internally if <a class="reference internal" href="#console.Console" title="console.Console"><tt class="xref py py-class docutils literal"><span class="pre">Console</span></tt></a> initialization parameter
+<em>disable_auto_process_flags</em> is not set.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This method should <strong>ONLY</strong> be called when <a class="reference internal" href="#console.Console" title="console.Console"><tt class="xref py py-class docutils literal"><span class="pre">Console</span></tt></a> is initialized with
+<em>disable_auto_process_flags</em>. If called after terminal flags have been processed,
+a <strong>CallError</strong> will be raised. Simailary if called twise.</p>
+</div>
+<dl class="docutils">
+<dt>Raises:</dt>
+<dd>CallError</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="console.Console.terminal_quickadd_flags">
+<tt class="descname">terminal_quickadd_flags</tt><big>(</big><em>longf_list</em>, <em>shortf_str=None</em><big>)</big><a class="reference internal" href="_modules/console.html#Console.terminal_quickadd_flags"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#console.Console.terminal_quickadd_flags" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="docutils">
+<dt>Quick and dirty way to add terminal flags. Utilizeable in two cases:</dt>
+<dd><ol class="first last arabic simple">
+<li><a class="reference internal" href="#console.Console.terminal_init" title="console.Console.terminal_init"><tt class="xref py py-meth docutils literal"><span class="pre">terminal_init()</span></tt></a></li>
+<li>If <a class="reference internal" href="#console.Console" title="console.Console"><tt class="xref py py-meth docutils literal"><span class="pre">Console()</span></tt></a> is initialized with <em>disable_auto_process_flags</em>, than this
+method can be called upon the <a class="reference internal" href="#console.Console" title="console.Console"><tt class="xref py py-class docutils literal"><span class="pre">Console</span></tt></a> object and followed by a call to
+the parsing function <a class="reference internal" href="#console.Console.terminal_process_flags" title="console.Console.terminal_process_flags"><tt class="xref py py-meth docutils literal"><span class="pre">terminal_process_flags()</span></tt></a> when all flag options are
+added.</li>
+</ol>
+</dd>
+<dt>Args:</dt>
+<dd><ul class="first last">
+<li><p class="first">longf_list (list): All list items must be of type &#8216;string&#8217;. Each item correponds
+to one flag entry. The list item takes the form <em>&#8220;longflag=option&#8221;</em>, where
+<em>&#8216;longflag&#8217;</em> is the flag name and <em>&#8216;option&#8217;</em> is the input type.</p>
+<blockquote>
+<div><ul class="simple">
+<li><em>&#8220;ignore&#8221;</em> for <strong>FLAG_INPUT_IGNORE</strong>. This option <em>&#8216;=ignore&#8217;</em> may be left out of
+string, as it is the default option. Eg. string only needs to be <em>&#8220;longflag&#8221;</em>.</li>
+<li><em>&#8220;float&#8221;</em> for <strong>FLAG_INPUT_FLOAT</strong></li>
+<li><em>&#8220;str&#8221;</em> for <strong>FLAG_INPUT_STR</strong></li>
+<li><em>&#8220;int&#8221;</em> for <strong>FLAG_INPUT_INT</strong></li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+</dd>
+<dt>Kwargs:</dt>
+<dd><ul class="first last simple">
+<li>shortf_str (str): a string of characters, at most <em>n</em> characters long where <em>n</em>
+is the number of list items in <em>&#8216;longf_list&#8217;</em>. Each characters represents
+the correponding longf <strong>in-order</strong> of apperance. If no short flag is desired, a
+questionmark (?) will place no short flag for the associated flag.
+Eg. &#8220;rs?o&#8221; would correspond to atleast 4 flags, but only 3 of them are assigned
+a short flag.</li>
+</ul>
+</dd>
+</dl>
+<p>No description will be given for the flag, and the <a class="reference internal" href="#console.Console.default_flag_handler" title="console.Console.default_flag_handler"><tt class="xref py py-meth docutils literal"><span class="pre">default_flag_handler()</span></tt></a> will
+be assigned as its activation method.</p>
+<dl class="docutils">
+<dt>Example:</dt>
+<dd>self.terminal_quickadd_opts([&#8220;radius=float&#8221;, &#8220;show&#8221;, &#8220;circles=int&#8221;, &#8220;file&#8221;], &#8220;r?c&#8221;)</dd>
+<dt>would produce the flags:</dt>
+<dd><ul class="first last simple">
+<li>-r &#8211;radius [float]</li>
+<li>&#8211;show</li>
+<li>-c &#8211;circles [int]</li>
+<li>&#8211;file</li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This method should <strong>ONLY</strong> be utilized in the above mentioned cases. Failure to do
+so will result in an <strong>CallError</strong> exception.</p>
+</div>
+<dl class="docutils">
+<dt>Raises:</dt>
+<dd>AttributeError, CallError</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="custom-exceptions">
+<h2>Custom Exceptions<a class="headerlink" href="#custom-exceptions" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="console.CallError">
+<em class="property">class </em><tt class="descclassname">console.</tt><tt class="descname">CallError</tt><big>(</big><em>message</em>, <em>*args</em><big>)</big><a class="reference internal" href="_modules/console.html#CallError"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#console.CallError" title="Permalink to this definition">¶</a></dt>
+<dd><p>Exception raised when a programming mistake has happend: If for instance a method
+that should only be executed once is called twise, this exception will be raised.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="console.InputError">
+<em class="property">class </em><tt class="descclassname">console.</tt><tt class="descname">InputError</tt><big>(</big><em>message</em>, <em>*args</em><big>)</big><a class="reference internal" href="_modules/console.html#InputError"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#console.InputError" title="Permalink to this definition">¶</a></dt>
+<dd><p>Exception raised when terminal input does not match expected input,
+eg. flag &#8211;example require an integer input(FLAG_INPUT_INT), but a string is supplied.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="constant-flags">
+<h2>Constant Flags<a class="headerlink" href="#constant-flags" title="Permalink to this headline">¶</a></h2>
+<p>Flags for the <a class="reference internal" href="#console.Display_Information" title="console.Display_Information"><tt class="xref py py-class docutils literal"><span class="pre">Display_Information</span></tt></a> class. Used to indicate the log level of each of
+the information relay methods.</p>
+<blockquote>
+<div><ol class="arabic simple" start="0">
+<li><strong>DI_IGNORE</strong></li>
+<li><strong>DI_STDOUT</strong></li>
+<li><strong>DI_LOG</strong></li>
+<li><strong>DI_STDOUT_LOG</strong></li>
+</ol>
+</div></blockquote>
+<p>Flags used to initiate the in-program console <a class="reference internal" href="#console.Console.console_start" title="console.Console.console_start"><tt class="xref py py-meth docutils literal"><span class="pre">Console.console_start()</span></tt></a> which determines
+the <a class="reference internal" href="#console.Display_Information" title="console.Display_Information"><tt class="xref py py-class docutils literal"><span class="pre">Display_Information</span></tt></a> settings.</p>
+<blockquote>
+<div><ol class="arabic simple" start="0">
+<li><strong>DI_CONSOLE_IGNORE</strong> - all settings will be set to <strong>DI_IGNORE</strong></li>
+<li><strong>DI_CONSOLE_INHERIT</strong> - all settings will be inherited with the settings present in
+<a class="reference internal" href="#console.Console" title="console.Console"><tt class="xref py py-class docutils literal"><span class="pre">Console</span></tt></a></li>
+</ol>
+</div></blockquote>
+<dl class="docutils">
+<dt>Flags used internally to represent expected input type from a flag</dt>
+<dd><ol class="first last arabic simple" start="0">
+<li><strong>FLAG_INPUT_IGNORE</strong></li>
+<li><strong>FLAG_INPUT_STR</strong></li>
+<li><strong>FLAG_INPUT_INT</strong></li>
+<li><strong>FLAG_INPUT_FLOAT</strong></li>
+</ol>
+</dd>
+</dl>
+</div>
+<div class="section" id="command">
+<h2>Command<a class="headerlink" href="#command" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="console.Command">
+<em class="property">class </em><tt class="descclassname">console.</tt><tt class="descname">Command</tt><big>(</big><em>command_name</em>, <em>method</em>, <em>description</em>, <em>usage=''</em><big>)</big><a class="reference internal" href="_modules/console.html#Command"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#console.Command" title="Permalink to this definition">¶</a></dt>
+<dd><p>Object represents a command. It holds a list of flags associated with this command,
+a description of what this command does and a method supplied at initialization
+that is ment to be executed when this Command is submitted.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><ul class="first last simple">
+<li>command_name (str): Name used in console to call upon this method.</li>
+<li>method (callable method): Called upon when &#8216;command_name&#8217; is entered into the
+running console.</li>
+<li>description (str): Description of what the command does.</li>
+<li>usage (str): Description of expected (additional non-flag) arguments. Appended
+after <em>&#8216;Usage: self.command_name [&#8211;flag] &#8216;</em>.</li>
+</ul>
+</dd>
+<dt>Attributes:</dt>
+<dd><ul class="first last simple">
+<li>self.command_name (str): Name of command.</li>
+<li>self.method (callable method): Method to be executed for current command.</li>
+<li>self.description (str): Description of what the command does.</li>
+<li>self.available_flags (list): All flags added to this command.</li>
+<li>self.usage (str): Description of expected (additional) arguments custom for
+this particular command. Eg. <em>&#8220;path_to_dir(str) max_open_files(int)&#8221;</em>. This will
+be appended after <em>&#8216;Usage: self.command_name [&#8211;flags] &#8216;</em></li>
+</ul>
+</dd>
+</dl>
+<p>The &#8216;&#8211;help&#8217; flag is automatically added at initialization.</p>
+<p>The <em>available_flags</em> attribute dictionary is formated as follows:
+{&#8216;longf&#8217;:{&#8216;shortf&#8217;:(str), &#8216;description:(str), &#8216;input&#8217;:(), &#8216;method&#8217;:(callable method)}}
+with respect to the attributes submitted in <a class="reference internal" href="#console.Command.add_flag" title="console.Command.add_flag"><tt class="xref py py-meth docutils literal"><span class="pre">add_flag()</span></tt></a>.</p>
+<dl class="docutils">
+<dt>Raises:</dt>
+<dd>TypeError</dd>
+</dl>
+<dl class="method">
+<dt id="console.Command.add_flag">
+<tt class="descname">add_flag</tt><big>(</big><em>longf</em>, <em>shortf=None</em>, <em>description=''</em>, <em>input=0</em>, <em>method=None</em><big>)</big><a class="reference internal" href="_modules/console.html#Command.add_flag"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#console.Command.add_flag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a flag to the current command.
+See description of <a class="reference internal" href="#console.Console.terminal_add_flag" title="console.Console.terminal_add_flag"><tt class="xref py py-meth docutils literal"><span class="pre">Console.terminal_add_flag()</span></tt></a></p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+<div class="section" id="display-information">
+<h1>Display information<a class="headerlink" href="#display-information" title="Permalink to this headline">¶</a></h1>
+<p>Print information flow throughout your program to either the user and/or logfile.</p>
+<span class="target" id="module-console"></span><span class="target" id="module-console"></span><dl class="class">
+<dt id="console.Display_Information">
+<em class="property">class </em><tt class="descclassname">console.</tt><tt class="descname">Display_Information</tt><big>(</big><em>DI_settings=None</em><big>)</big><a class="reference internal" href="_modules/console.html#Display_Information"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#console.Display_Information" title="Permalink to this definition">¶</a></dt>
+<dd><p>This class is utilized to relay information flow throughout the program.</p>
+<dl class="docutils">
+<dt>There are three calls that support their own induvidual settings, they are:</dt>
+<dd><ul class="first last simple">
+<li><a class="reference internal" href="#console.Display_Information.verbose" title="console.Display_Information.verbose"><tt class="xref py py-meth docutils literal"><span class="pre">verbose()</span></tt></a> used to notify user of program flow.</li>
+<li><a class="reference internal" href="#console.Display_Information.debug" title="console.Display_Information.debug"><tt class="xref py py-meth docutils literal"><span class="pre">debug()</span></tt></a> used to notify user about debug information.</li>
+<li><a class="reference internal" href="#console.Display_Information.vdebug" title="console.Display_Information.vdebug"><tt class="xref py py-meth docutils literal"><span class="pre">vdebug()</span></tt></a> used to notify user with detailed debug information.</li>
+</ul>
+</dd>
+</dl>
+<p>When a call is made to one of these methods, they will determine where to relay the message
+based on their settings. The message can be routed to STDOUT, logfile or be ignored.</p>
+<p>If the message is sent to a logfile, the file will be opened for append, and closed after
+the message has been written to it. Thus, IOError may be raised by a call to any of the
+information relay methods.</p>
+<dl class="docutils">
+<dt>Kwargs:</dt>
+<dd><ul class="first">
+<li><p class="first">DI_settings (dict): Holds all settings available for this class.
+The settings can be viewed as two parts, one which determine where to route
+information relayed to respective calls.
+Expected keys for the relay of information are <em>&#8216;verbose&#8217;</em>, <em>&#8216;debug&#8217;</em> and
+<em>&#8216;verbosedebug&#8217;</em>. Expected values are the DI flags</p>
+<blockquote>
+<div><ol class="arabic simple" start="0">
+<li><strong>DI_IGNORE</strong> Call has no effect.</li>
+<li><strong>DI_STDOUT</strong> Message will be sent to STDOUT.</li>
+<li><strong>DI_LOG</strong> Message will be sent to logfile.</li>
+<li><strong>DI_STDOUT_LOG</strong> Message will be sent to both STDOUT and logfile</li>
+</ol>
+</div></blockquote>
+<p>Default behaviour is to <strong>DI_IGNORE</strong> everything.
+Expected keys for additional settings are <em>&#8216;log_filename_prefix&#8217;</em>
+and <em>&#8216;log_filename&#8217;</em>.
+Expected values for keys are</p>
+<blockquote>
+<div><ul class="simple">
+<li><em>&#8216;log_filename&#8217;</em>: <strong>str</strong> The full filename of the logfile. This filename is
+generated at initialization if not present (and may be supplied as argument
+to other instances to share settings/log_filename). This filename is opened
+for append when a verbose call is made.</li>
+<li><em>&#8216;log_filename_prefix&#8217;</em>: <strong>str</strong> Prefix for the log filename. Has no effect if
+<em>log_filename</em> is supplied. Default value is &#8216;CONSOLE&#8217;.</li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+<p class="last">If additional keys are present, they will be ignored.</p>
+</dd>
+<dt>Attribute:</dt>
+<dd><ul class="first last simple">
+<li>self.log_filename (str): Holds the string name of the logfile.</li>
+<li>self.log_filename_prefix (str): Holds the prefix of which the logfile is created
+with.</li>
+<li>self.log_directory (str): Holds the path to log directory, including trailing &#8216;/&#8217;.</li>
+<li>self.display_information_settings (dict): Holds the current settings for all modes.
+Identical to the expected structure of supplied argument DI_settings. All settings
+will have a value after initialization.</li>
+</ul>
+</dd>
+</dl>
+<p>Expected DI_settings would look something like:
+{&#8216;v&#8217;:DI_STDOUT, &#8216;d&#8217;:DI_LOG, &#8216;vd&#8217;:DI_STDOUT_LOG, &#8216;log_filename_prefix&#8217;:(str), &#8216;log_filename&#8217;:(str)}</p>
+<dl class="docutils">
+<dt>Raises:</dt>
+<dd>OSError, TypeError, AttributeError</dd>
+<dt>Modules:</dt>
+<dd>os</dd>
+</dl>
+<dl class="method">
+<dt id="console.Display_Information.debug">
+<tt class="descname">debug</tt><big>(</big><em>format</em>, <em>*args</em><big>)</big><a class="reference internal" href="_modules/console.html#Display_Information.debug"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#console.Display_Information.debug" title="Permalink to this definition">¶</a></dt>
+<dd><p>Outputs the supplied message to the appropriate channel spesified at initialization.
+The <strong>&#8216;debug&#8217;</strong> setting determines actions of this call. A newline is appended to the
+end of the message.</p>
+<p>Message is prefixed with current thread and calling method.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><ul class="first last simple">
+<li>format (string): Message to submit, with associated identifiers for argument inputs.</li>
+<li><em>args (): Arguments will be supplied to identifiers in *format</em> in-order.</li>
+</ul>
+</dd>
+</dl>
+<p>No sanity check is performed on relation between identifier and supplied argument.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="console.Display_Information.vdebug">
+<tt class="descname">vdebug</tt><big>(</big><em>format</em>, <em>*args</em><big>)</big><a class="reference internal" href="_modules/console.html#Display_Information.vdebug"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#console.Display_Information.vdebug" title="Permalink to this definition">¶</a></dt>
+<dd><p>Outputs the supplied message to the appropriate channe spesified at initialization.
+The <strong>&#8216;verbosedebug&#8217;</strong> setting determines actions of this call. A newline is appended to
+the end of the message.</p>
+<p>Message is prefixed with current thread and calling method.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><ul class="first last simple">
+<li>format (string): Message to submit, with associated identifiers for argument inputs.</li>
+<li><em>args (): Arguments will be supplied to identifiers in *format</em> in-order.</li>
+</ul>
+</dd>
+</dl>
+<p>No sanity check is performed on relation between identifier and supplied argument.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="console.Display_Information.verbose">
+<tt class="descname">verbose</tt><big>(</big><em>format</em>, <em>*args</em><big>)</big><a class="reference internal" href="_modules/console.html#Display_Information.verbose"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#console.Display_Information.verbose" title="Permalink to this definition">¶</a></dt>
+<dd><p>Outputs the supplied message to the appropriate channel spesified at initialization.
+The <strong>&#8216;verbose&#8217;</strong> setting determines actions of this call. A newline is appended to the
+end of the message.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><ul class="first last simple">
+<li>format (string): Message to submit, with associated identifiers for argument inputs.</li>
+<li><em>args (): Arguments will be supplied to identifiers in *format</em> in-order.</li>
+</ul>
+</dd>
+</dl>
+<p>No sanity check is performed on relation between identifier and supplied argument.</p>
+</dd></dl>
+
+</dd></dl>
+
+<div class="toctree-wrapper compound">
+<ul class="simple">
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="#">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Python Console Baseclass documentation</a><ul>
+<li><a class="reference internal" href="#console">Console</a></li>
+<li><a class="reference internal" href="#custom-exceptions">Custom Exceptions</a></li>
+<li><a class="reference internal" href="#constant-flags">Constant Flags</a></li>
+<li><a class="reference internal" href="#command">Command</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#display-information">Display information</a><ul>
+</ul>
+</li>
+</ul>
+
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/index.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="#">console_baseclass_python 1.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Vegard Sandengen.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

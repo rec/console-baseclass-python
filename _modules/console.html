@@ -1,0 +1,1360 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>console &mdash; console_baseclass_python 1.0 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="console_baseclass_python 1.0 documentation" href="../index.html" />
+    <link rel="up" title="Module code" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../index.html">console_baseclass_python 1.0 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for console</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">.. module:: console</span>
+<span class="sd">    :platform: Unix, Windows</span>
+
+<span class="sd">.. moduleauthor:: Vegard Sandengen &lt;vegardsandengen@gmail.com&gt;</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">errno</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+
+<span class="c">#Flag definitions for Display_Information</span>
+<span class="n">DI_IGNORE</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="n">DI_STDOUT</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">DI_LOG</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="n">DI_STDOUT_LOG</span> <span class="o">=</span> <span class="mi">3</span>
+
+<span class="n">DI_CONSOLE_IGNORE</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="n">DI_CONSOLE_INHERIT</span> <span class="o">=</span> <span class="mi">1</span>
+
+<span class="n">DI_MIN_FLAG_LEVEL</span> <span class="o">=</span> <span class="n">DI_IGNORE</span>
+<span class="n">DI_MAX_FLAG_LEVEL</span> <span class="o">=</span> <span class="n">DI_STDOUT_LOG</span>
+
+
+<span class="n">FLAG_INPUT_IGNORE</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="n">FLAG_INPUT_STR</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">FLAG_INPUT_INT</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="n">FLAG_INPUT_FLOAT</span> <span class="o">=</span> <span class="mi">3</span>
+
+<span class="n">STR_FLAG_INPUT_IGNORE</span> <span class="o">=</span> <span class="s">&quot;ignore&quot;</span>
+<span class="n">STR_FLAG_INPUT_STR</span> <span class="o">=</span> <span class="s">&quot;str&quot;</span>
+<span class="n">STR_FLAG_INPUT_INT</span> <span class="o">=</span> <span class="s">&quot;int&quot;</span>
+<span class="n">STR_FLAG_INPUT_FLOAT</span> <span class="o">=</span> <span class="s">&quot;float&quot;</span>
+
+<div class="viewcode-block" id="InputError"><a class="viewcode-back" href="../index.html#console.InputError">[docs]</a><span class="k">class</span> <span class="nc">InputError</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Exception raised when terminal input does not match expected input,</span>
+<span class="sd">    eg. flag --example require an integer input(FLAG_INPUT_INT), but a string is supplied.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+        <span class="n">msg</span> <span class="o">=</span> <span class="n">message</span> <span class="o">%</span> <span class="n">args</span>
+        <span class="ne">Exception</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="CallError"><a class="viewcode-back" href="../index.html#console.CallError">[docs]</a><span class="k">class</span> <span class="nc">CallError</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Exception raised when a programming mistake has happend: If for instance a method</span>
+<span class="sd">    that should only be executed once is called twise, this exception will be raised.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+        <span class="n">msg</span> <span class="o">=</span> <span class="n">message</span> <span class="o">%</span> <span class="n">args</span>
+        <span class="ne">Exception</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Display_Information"><a class="viewcode-back" href="../index.html#console.Display_Information">[docs]</a><span class="k">class</span> <span class="nc">Display_Information</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;This class is utilized to relay information flow throughout the program.</span>
+
+<span class="sd">    There are three calls that support their own induvidual settings, they are:</span>
+<span class="sd">        - :meth:`verbose` used to notify user of program flow.</span>
+<span class="sd">        - :meth:`debug` used to notify user about debug information.</span>
+<span class="sd">        - :meth:`vdebug` used to notify user with detailed debug information.</span>
+<span class="sd">    When a call is made to one of these methods, they will determine where to relay the message</span>
+<span class="sd">    based on their settings. The message can be routed to STDOUT, logfile or be ignored.</span>
+
+<span class="sd">    If the message is sent to a logfile, the file will be opened for append, and closed after</span>
+<span class="sd">    the message has been written to it. Thus, IOError may be raised by a call to any of the</span>
+<span class="sd">    information relay methods.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">DI_settings</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Kwargs:</span>
+<span class="sd">            - DI_settings (dict): Holds all settings available for this class.</span>
+<span class="sd">              The settings can be viewed as two parts, one which determine where to route</span>
+<span class="sd">              information relayed to respective calls.</span>
+<span class="sd">              Expected keys for the relay of information are *&#39;verbose&#39;*, *&#39;debug&#39;* and</span>
+<span class="sd">              *&#39;verbosedebug&#39;*. Expected values are the DI flags</span>
+<span class="sd">                0. **DI_IGNORE** Call has no effect.</span>
+<span class="sd">                1. **DI_STDOUT** Message will be sent to STDOUT.</span>
+<span class="sd">                2. **DI_LOG** Message will be sent to logfile.</span>
+<span class="sd">                3. **DI_STDOUT_LOG** Message will be sent to both STDOUT and logfile</span>
+<span class="sd">              Default behaviour is to **DI_IGNORE** everything.</span>
+<span class="sd">              Expected keys for additional settings are *&#39;log_filename_prefix&#39;*</span>
+<span class="sd">              and *&#39;log_filename&#39;*.</span>
+<span class="sd">              Expected values for keys are</span>
+<span class="sd">                - *&#39;log_filename&#39;*: **str** The full filename of the logfile. This filename is</span>
+<span class="sd">                  generated at initialization if not present (and may be supplied as argument</span>
+<span class="sd">                  to other instances to share settings/log_filename). This filename is opened</span>
+<span class="sd">                  for append when a verbose call is made.</span>
+<span class="sd">                - *&#39;log_filename_prefix&#39;*: **str** Prefix for the log filename. Has no effect if</span>
+<span class="sd">                  *log_filename* is supplied. Default value is &#39;CONSOLE&#39;.</span>
+<span class="sd">            If additional keys are present, they will be ignored.</span>
+
+<span class="sd">        Attribute:</span>
+<span class="sd">            - self.log_filename (str): Holds the string name of the logfile.</span>
+<span class="sd">            - self.log_filename_prefix (str): Holds the prefix of which the logfile is created</span>
+<span class="sd">              with.</span>
+<span class="sd">            - self.log_directory (str): Holds the path to log directory, including trailing &#39;/&#39;.</span>
+<span class="sd">            - self.display_information_settings (dict): Holds the current settings for all modes.</span>
+<span class="sd">              Identical to the expected structure of supplied argument DI_settings. All settings</span>
+<span class="sd">              will have a value after initialization.</span>
+
+<span class="sd">        Expected DI_settings would look something like:</span>
+<span class="sd">        {&#39;v&#39;:DI_STDOUT, &#39;d&#39;:DI_LOG, &#39;vd&#39;:DI_STDOUT_LOG, &#39;log_filename_prefix&#39;:(str), &#39;log_filename&#39;:(str)}</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            OSError, TypeError, AttributeError</span>
+
+<span class="sd">        Modules:</span>
+<span class="sd">            os</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Internal Attributes:</span>
+<span class="sd">            - self._init_completed (bool): Is utilized to sanity check calls to the</span>
+<span class="sd">              information relay functions. This variable is initialized upon class init.</span>
+<span class="sd">              If the information relay functions are called before initialization a CallError</span>
+<span class="sd">              exception is raised. (May/will be convient in derived classes where this class</span>
+<span class="sd">              has yet to be initialized)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">import</span> <span class="nn">os</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">display_information_settings</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_filename_prefix</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_filename</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="s">&#39;logs&#39;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">exception</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">exception</span><span class="o">.</span><span class="n">errno</span> <span class="o">!=</span> <span class="n">errno</span><span class="o">.</span><span class="n">EEXIST</span><span class="p">:</span>
+                <span class="k">raise</span>
+
+        <span class="k">if</span> <span class="s">&quot;log_filename_prefix&quot;</span> <span class="ow">in</span> <span class="n">DI_settings</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log_filename_prefix</span> <span class="o">=</span> <span class="n">DI_settings</span><span class="p">[</span><span class="s">&quot;log_filename_prefix&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="s">&quot;log_filename&quot;</span> <span class="ow">in</span> <span class="n">DI_settings</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log_filename</span> <span class="o">=</span> <span class="n">DI_settings</span><span class="p">[</span><span class="s">&quot;log_filename&quot;</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_filename_prefix</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log_filename_prefix</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;Invalid argument &#39;log_filename_prefix&#39;. Must be of type &#39;str&#39;&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log_filename_prefix</span> <span class="o">=</span> <span class="s">&quot;CONSOLE&quot;</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_filename</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log_filename</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;Invalid argument &#39;log_filename&#39;. Must be of type &#39;str&#39;&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_filename_prefix</span>
+            <span class="n">filename</span> <span class="o">+=</span> <span class="s">&quot;[&quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">asctime</span><span class="p">())</span><span class="o">+</span><span class="s">&quot;]&quot;</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log_filename</span> <span class="o">=</span> <span class="n">filename</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">display_information_settings</span><span class="p">[</span><span class="s">&#39;log_filename_prefix&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_filename_prefix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">display_information_settings</span><span class="p">[</span><span class="s">&#39;log_filename&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_filename</span>
+
+        <span class="c">#Create delimiters for all supported settings, initializing them to false</span>
+        <span class="n">supported_settings</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;verbose&#39;</span><span class="p">,</span> <span class="s">&#39;debug&#39;</span><span class="p">,</span> <span class="s">&#39;verbosedebug&#39;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">setting</span> <span class="ow">in</span> <span class="n">supported_settings</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">display_information_settings</span><span class="p">[</span><span class="n">setting</span><span class="p">]</span> <span class="o">=</span> <span class="n">DI_IGNORE</span>
+
+        <span class="k">if</span> <span class="n">DI_settings</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">DI_settings</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;Invalid argument &#39;DI_settings&#39;. Must be of type &#39;dict&#39;&quot;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="p">(</span><span class="n">setting</span><span class="p">,</span> <span class="n">DI_level</span><span class="p">)</span> <span class="ow">in</span> <span class="n">DI_settings</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">setting</span> <span class="ow">in</span> <span class="n">supported_settings</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">DI_level</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;Invalid value argument to dict key &#39;&quot;</span><span class="o">+</span><span class="n">setting</span><span class="o">+</span>
+                        <span class="s">&quot;&#39;. Value received is &#39;&quot;</span><span class="o">+</span><span class="n">DI_level</span><span class="o">+</span><span class="s">&quot;&#39;, expected type &#39;int&#39;.&quot;</span><span class="o">+</span>
+                        <span class="s">&quot; Use associated DI_ flags to assign value.&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">DI_level</span> <span class="o">&lt;</span> <span class="n">DI_MIN_FLAG_LEVEL</span> <span class="ow">or</span> <span class="n">DI_level</span> <span class="o">&gt;</span> <span class="n">DI_MAX_FLAG_LEVEL</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&quot;Invalid value range. Unknown flag value &#39;&quot;</span><span class="o">+</span>
+                        <span class="nb">str</span><span class="p">(</span><span class="n">DI_level</span><span class="p">)</span><span class="o">+</span> <span class="s">&quot;&#39; for key &#39;&quot;</span><span class="o">+</span><span class="n">setting</span><span class="o">+</span><span class="s">&quot;&#39;.&quot;</span><span class="p">)</span>
+
+                <span class="bp">self</span><span class="o">.</span><span class="n">display_information_settings</span><span class="p">[</span><span class="n">setting</span><span class="p">]</span> <span class="o">=</span> <span class="n">DI_level</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_completed</span> <span class="o">=</span> <span class="bp">True</span>
+
+<div class="viewcode-block" id="Display_Information.verbose"><a class="viewcode-back" href="../index.html#console.Display_Information.verbose">[docs]</a>    <span class="k">def</span> <span class="nf">verbose</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">format</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Outputs the supplied message to the appropriate channel spesified at initialization.</span>
+<span class="sd">        The **&#39;verbose&#39;** setting determines actions of this call. A newline is appended to the</span>
+<span class="sd">        end of the message.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            - format (string): Message to submit, with associated identifiers for argument inputs.</span>
+<span class="sd">            - *args (): Arguments will be supplied to identifiers in *format* in-order.</span>
+<span class="sd">        No sanity check is performed on relation between identifier and supplied argument.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_assistant_is_initialized</span><span class="p">()</span>
+        <span class="n">tmp</span> <span class="o">=</span> <span class="n">format</span> <span class="o">%</span> <span class="n">args</span>
+        <span class="n">display</span> <span class="o">=</span> <span class="s">&quot;</span><span class="si">%s</span><span class="se">\n</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">tmp</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_assistant_information_relay</span><span class="p">(</span><span class="n">display</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">display_information_settings</span><span class="p">[</span><span class="s">&#39;verbose&#39;</span><span class="p">])</span>
+</div>
+<div class="viewcode-block" id="Display_Information.debug"><a class="viewcode-back" href="../index.html#console.Display_Information.debug">[docs]</a>    <span class="k">def</span> <span class="nf">debug</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">format</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Outputs the supplied message to the appropriate channel spesified at initialization.</span>
+<span class="sd">        The **&#39;debug&#39;** setting determines actions of this call. A newline is appended to the</span>
+<span class="sd">        end of the message.</span>
+
+<span class="sd">        Message is prefixed with current thread and calling method.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            - format (string): Message to submit, with associated identifiers for argument inputs.</span>
+<span class="sd">            - *args (): Arguments will be supplied to identifiers in *format* in-order.</span>
+<span class="sd">        No sanity check is performed on relation between identifier and supplied argument.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_assistant_is_initialized</span><span class="p">()</span>
+        <span class="n">display</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_assistant_debug</span><span class="p">(</span><span class="n">format</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_assistant_information_relay</span><span class="p">(</span><span class="n">display</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">display_information_settings</span><span class="p">[</span><span class="s">&#39;debug&#39;</span><span class="p">])</span>
+</div>
+<div class="viewcode-block" id="Display_Information.vdebug"><a class="viewcode-back" href="../index.html#console.Display_Information.vdebug">[docs]</a>    <span class="k">def</span> <span class="nf">vdebug</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">format</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Outputs the supplied message to the appropriate channe spesified at initialization.</span>
+<span class="sd">        The **&#39;verbosedebug&#39;** setting determines actions of this call. A newline is appended to</span>
+<span class="sd">        the end of the message.</span>
+
+<span class="sd">        Message is prefixed with current thread and calling method.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            - format (string): Message to submit, with associated identifiers for argument inputs.</span>
+<span class="sd">            - *args (): Arguments will be supplied to identifiers in *format* in-order.</span>
+<span class="sd">        No sanity check is performed on relation between identifier and supplied argument.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_assistant_is_initialized</span><span class="p">()</span>
+        <span class="n">display</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_assistant_debug</span><span class="p">(</span><span class="n">format</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_assistant_information_relay</span><span class="p">(</span><span class="n">display</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">display_information_settings</span><span class="p">[</span><span class="s">&#39;verbosedebug&#39;</span><span class="p">])</span>
+</div>
+    <span class="k">def</span> <span class="nf">_assistant_is_initialized</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Hack? to check if class is initialized. A CallError exception is raised if</span>
+<span class="sd">        initialization is not completed.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;_init_completed&#39;</span><span class="p">):</span>
+            <span class="k">return</span>
+        <span class="k">raise</span> <span class="n">CallError</span><span class="p">(</span><span class="s">&quot;Display_Information not initialized. Programming Error.&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_assistant_debug</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">format</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Perform the formating of our message for the debug calls (debug / vdebug).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">import</span> <span class="nn">inspect</span>
+        <span class="kn">import</span> <span class="nn">threading</span>
+
+        <span class="n">msg</span> <span class="o">=</span> <span class="n">format</span> <span class="o">%</span> <span class="n">args</span>
+        <span class="n">display</span> <span class="o">=</span> <span class="s">&quot;[</span><span class="si">%s</span><span class="s">: (</span><span class="si">%s</span><span class="s">)]: </span><span class="si">%s</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">%</span> <span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">current_thread</span><span class="p">()</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">inspect</span><span class="o">.</span><span class="n">stack</span><span class="p">()[</span><span class="mi">2</span><span class="p">][</span><span class="mi">3</span><span class="p">],</span><span class="n">msg</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">display</span>
+
+    <span class="k">def</span> <span class="nf">_assistant_information_relay</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">DI_level</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Write the message to the output levels determined by the DI_level.</span>
+<span class="sd">        Will create/open the file if DI_level is appending to it.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">import</span> <span class="nn">sys</span>
+
+        <span class="k">if</span> <span class="n">DI_level</span> <span class="o">==</span> <span class="n">DI_IGNORE</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="k">if</span> <span class="n">DI_level</span> <span class="o">==</span> <span class="n">DI_STDOUT</span> <span class="ow">or</span> <span class="n">DI_level</span> <span class="o">==</span> <span class="n">DI_STDOUT_LOG</span><span class="p">:</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">DI_level</span> <span class="o">==</span> <span class="n">DI_LOG</span> <span class="ow">or</span> <span class="n">DI_level</span> <span class="o">==</span> <span class="n">DI_STDOUT_LOG</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log_directory</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_filename</span><span class="p">,</span> <span class="s">&quot;a&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Command"><a class="viewcode-back" href="../index.html#console.Command">[docs]</a><span class="k">class</span> <span class="nc">Command</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Object represents a command. It holds a list of flags associated with this command,</span>
+<span class="sd">    a description of what this command does and a method supplied at initialization</span>
+<span class="sd">    that is ment to be executed when this Command is submitted.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command_name</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">description</span><span class="p">,</span> <span class="n">usage</span><span class="o">=</span><span class="s">&quot;&quot;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Args:</span>
+<span class="sd">            - command_name (str): Name used in console to call upon this method.</span>
+<span class="sd">            - method (callable method): Called upon when &#39;command_name&#39; is entered into the</span>
+<span class="sd">              running console.</span>
+<span class="sd">            - description (str): Description of what the command does.</span>
+<span class="sd">            - usage (str): Description of expected (additional non-flag) arguments. Appended</span>
+<span class="sd">              after *&#39;Usage: self.command_name [--flag] &#39;*.</span>
+
+<span class="sd">        Attributes:</span>
+<span class="sd">            - self.command_name (str): Name of command.</span>
+<span class="sd">            - self.method (callable method): Method to be executed for current command.</span>
+<span class="sd">            - self.description (str): Description of what the command does.</span>
+<span class="sd">            - self.available_flags (list): All flags added to this command.</span>
+<span class="sd">            - self.usage (str): Description of expected (additional) arguments custom for</span>
+<span class="sd">              this particular command. Eg. *&quot;path_to_dir(str) max_open_files(int)&quot;*. This will</span>
+<span class="sd">              be appended after *&#39;Usage: self.command_name [--flags] &#39;*</span>
+
+<span class="sd">        The &#39;--help&#39; flag is automatically added at initialization.</span>
+
+<span class="sd">        The *available_flags* attribute dictionary is formated as follows:</span>
+<span class="sd">        {&#39;longf&#39;:{&#39;shortf&#39;:(str), &#39;description:(str), &#39;input&#39;:(), &#39;method&#39;:(callable method)}}</span>
+<span class="sd">        with respect to the attributes submitted in :meth:`add_flag`.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            TypeError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Private Attributes</span>
+<span class="sd">            - self._PHC (_Print_Help_Command object): Assistant class to print all help options.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="s">&#39;__call__&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="bp">False</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;&#39;method&#39; argument is not a callable&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">description</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="o">==</span> <span class="bp">False</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;&#39;description&#39; argument is not of type string&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">command_name</span> <span class="o">=</span> <span class="n">command_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">method</span> <span class="o">=</span> <span class="n">method</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">description</span> <span class="o">=</span> <span class="n">description</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">available_flags</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">usage</span> <span class="o">=</span> <span class="s">&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_PHC</span> <span class="o">=</span> <span class="n">_Print_Help_Console</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">add_flag</span><span class="p">(</span><span class="n">longf</span><span class="o">=</span><span class="s">&quot;help&quot;</span><span class="p">,</span> <span class="n">shortf</span><span class="o">=</span><span class="s">&quot;h&quot;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s">&quot;Display available flag options&quot;</span><span class="p">,</span>
+                <span class="n">method</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_command_help</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="Command.add_flag"><a class="viewcode-back" href="../index.html#console.Command.add_flag">[docs]</a>    <span class="k">def</span> <span class="nf">add_flag</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">longf</span><span class="p">,</span> <span class="n">shortf</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;</span><span class="p">,</span> <span class="nb">input</span><span class="o">=</span><span class="n">FLAG_INPUT_IGNORE</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Add a flag to the current command.</span>
+<span class="sd">        See description of :meth:`Console.terminal_add_flag`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">method</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="s">&#39;__call__&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="bp">False</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;&#39;method&#39; argument is not a callable&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">description</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">description</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="o">==</span> <span class="bp">False</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;&#39;name&#39; argument is not a string&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">shortf</span> <span class="o">!=</span> <span class="bp">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shortf</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;&#39;shortf&#39; argument is not a string&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">longf</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="o">==</span> <span class="bp">False</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;&#39;longf&#39; argument is not a string&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">input</span> <span class="o">!=</span> <span class="bp">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="nb">input</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;&#39;input&#39; argument is not a integer&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">longf</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&quot;--&quot;</span><span class="p">:</span>
+            <span class="n">longf</span> <span class="o">=</span> <span class="s">&quot;--&quot;</span><span class="o">+</span><span class="n">longf</span>
+        <span class="k">if</span> <span class="n">shortf</span> <span class="o">!=</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">shortf</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&#39;-&#39;</span><span class="p">:</span>
+            <span class="n">shortf</span> <span class="o">=</span> <span class="s">&#39;-&#39;</span><span class="o">+</span><span class="n">shortf</span>
+        <span class="k">if</span> <span class="n">shortf</span> <span class="o">!=</span> <span class="bp">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">shortf</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;&#39;shortf&#39; argument must be in form &#39;x&#39; or &#39;-x&#39;&quot;</span><span class="p">)</span>
+
+        <span class="n">flag_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;longf&#39;</span><span class="p">:</span><span class="n">longf</span><span class="p">,</span> <span class="s">&#39;shortf&#39;</span><span class="p">:</span><span class="n">shortf</span><span class="p">,</span> <span class="s">&#39;description&#39;</span><span class="p">:</span><span class="n">description</span><span class="p">,</span>
+                <span class="s">&#39;input&#39;</span><span class="p">:</span><span class="nb">input</span><span class="p">,</span><span class="s">&#39;method&#39;</span><span class="p">:</span><span class="n">method</span><span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">available_flags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">flag_dict</span><span class="p">)</span>
+
+</div>
+    <span class="k">def</span> <span class="nf">_command_help</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            Internal command called whenever the HELP flag is</span>
+<span class="sd">            issued for a command</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_PHC</span><span class="o">.</span><span class="n">print_help</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Console"><a class="viewcode-back" href="../index.html#console.Console">[docs]</a><span class="k">class</span> <span class="nc">Console</span><span class="p">(</span><span class="n">Display_Information</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Class to derive from. This class offers two main functionalities, both decoupled from</span>
+<span class="sd">    eachother.</span>
+
+<span class="sd">    **Terminal Flag Handler**</span>
+
+<span class="sd">    A simple initialization of your derived class will parse and execute(by default) all flags</span>
+<span class="sd">    (defined) present on the terminal at program start(through the sys.argv attribute).</span>
+<span class="sd">    Override :meth:`terminal_init` to add custom flags to your program</span>
+<span class="sd">    at startup. Each flag may be associated with a method to be executed when the flag is</span>
+<span class="sd">    present. Each flag may also expect an input of any sort(string, integer or float) available</span>
+<span class="sd">    within the method flag handler. If no method is supplied, the default</span>
+<span class="sd">    :meth:`default_flag_handler` is called. Override this to handle all flags in one place</span>
+<span class="sd">    by defaut.</span>
+
+<span class="sd">    The flags are either processed automatically after :meth:`terminal_init` has finished,</span>
+<span class="sd">    or not processed at all until :meth:`terminal_process_flags` is called manually if</span>
+<span class="sd">    *disable_auto_process_flags* is set.</span>
+
+<span class="sd">    Flags are identified by their *longf* name, and all flags are required to have one.</span>
+<span class="sd">    Long flags (*longf*) are identified by two leading dashes. The shortcut one character option</span>
+<span class="sd">    with one leading dash is optional.</span>
+<span class="sd">    All flags (in both usages) are parsed and executed in order of apperance left to right.</span>
+
+<span class="sd">    There are two main ways to add flags:</span>
+<span class="sd">        1. Through :meth:`terminal_add_flag` inside the derived :meth:`terminal_init`.</span>
+<span class="sd">           The derived class is than called with the default init arguments.</span>
+<span class="sd">        2. :meth:`terminal_quickadd_flags` let you quickly enter a list of flags that may have</span>
+<span class="sd">           shortcut values aswell. No description is used. The default flag handler is</span>
+<span class="sd">           executed when present.</span>
+<span class="sd">           .. note:</span>
+<span class="sd">            This method may not be called after initialization IF *disable_auto_process_flags*</span>
+<span class="sd">            is set to False. A CallError will be raised if so.</span>
+
+<span class="sd">    **In-program Console**</span>
+
+<span class="sd">    A console-like program letting you define custom commands that execute supplied methods</span>
+<span class="sd">    when entered in the console. Each command may have associated</span>
+<span class="sd">    flags(and their flag handler methods). This option closely related to the *cmd* module,</span>
+<span class="sd">    but this module offers in addition the ability to associate flags, inputs and running the</span>
+<span class="sd">    console as a thread(and daemon).</span>
+
+<span class="sd">    All commands must be added with :meth:`console_add_command` and be called before the console</span>
+<span class="sd">    is started with :meth:`console_start`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">DI_settings</span><span class="o">=</span><span class="p">{},</span> <span class="n">disable_default_flags</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">disable_auto_process_flags</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Kwargs:</span>
+<span class="sd">            - DI_settings (dict): May contain any of the key-value pairs parsed by</span>
+<span class="sd">              :class:`Display_Information`. These values are overridden by terminal flags.</span>
+<span class="sd">              This option can be utilized in the event that several *Display_Information* instances</span>
+<span class="sd">              would like to log to the same file/outputlevel etc. These settings is stored</span>
+<span class="sd">              in the (inheritted) attribute *self.display_information_settings* dictionary</span>
+<span class="sd">              that contain information output level, log filename and log filename prefix.</span>
+
+<span class="sd">            - disable_default_flags (bool): Determines whether or not all the default flags should</span>
+<span class="sd">              be added to the terminal. If enabled (by default) the :class:`Display_Information`</span>
+<span class="sd">              information methods will be fully available. If not, they will be disabled(Will</span>
+<span class="sd">              be initialized to DI_IGNORE) and flags removed from terminal flag list.</span>
+
+<span class="sd">            - disable_auto_process_flags (bool): Determines whether or not the Console</span>
+<span class="sd">              initialization should parse terminal flags.</span>
+<span class="sd">              If disabled, :class:`Display_Information` is left uninitialized</span>
+<span class="sd">              and :meth:`terminal_process_flags` must be called manually. This option is</span>
+<span class="sd">              convient if one wishes to utilize :meth:`terminal_quickadd_flags` without overriding</span>
+<span class="sd">              :meth:`terminal_init` or does not require the full features of</span>
+<span class="sd">              :meth:`terminal_add_flag`.</span>
+
+<span class="sd">        Attributes (public):</span>
+<span class="sd">            - self.terminal (Command object): Special case :class:`Command` object to represent</span>
+<span class="sd">              the *terminal*.</span>
+<span class="sd">            - self.terminal_active_flags (list): List of all flags matching available flags</span>
+<span class="sd">              present on the *terminal* at program launch. Each list item is a dictionary on the</span>
+<span class="sd">              form:</span>
+<span class="sd">              {&#39;longf&#39;:(str), &#39;description&#39;:(str), &#39;input&#39;:(int), &#39;method&#39;:(callable)}</span>
+<span class="sd">              where *longf* is the unique flag identifier.</span>
+<span class="sd">            - self.terminal_additional_args (list): List of all unaccounted for arguments on</span>
+<span class="sd">              the *terminal* line at program launch.</span>
+
+<span class="sd">        Attributes available in :class:`Command` activation handler method and</span>
+<span class="sd">        :meth:`default_flag_handler`/supplied flag activation handler method:</span>
+<span class="sd">            - self.current_command_active_flags (list): List of all flags matching available flags</span>
+<span class="sd">              present at the *console* command launch. Each list item is a dictionary on the form:</span>
+<span class="sd">              {&#39;longf&#39;:(str), &#39;description&#39;:(str), &#39;input&#39;:(int), &#39;method&#39;:(callable)} where</span>
+<span class="sd">              longf is the unique flag identifier.</span>
+<span class="sd">            - self.current_command_additional_args (list): List of all unaccounted for arguments</span>
+<span class="sd">              on the *console* command line.</span>
+<span class="sd">            - self.current_command_name (str): Name of the command that activated this method.</span>
+
+<span class="sd">        Attributes available in :meth:`default_flag_handler`/supplied flag activation handler</span>
+<span class="sd">        method:</span>
+<span class="sd">            - self.current_flag_name (str): Name of the flag (*longf*) that activated this method.</span>
+<span class="sd">            - self.current_flag_input (): If flag option required input, this variable will hold</span>
+<span class="sd">              that object converted to its intended object type (eg. *int* or *float*). If no</span>
+<span class="sd">              option is expected, this attribute will be None.</span>
+
+
+<span class="sd">        Modules:</span>
+<span class="sd">            sys</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            InputError, TypeError, OSError, AttributeError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="sd">&quot;&quot;&quot;This docstring is not parsed by Sphinx.</span>
+
+<span class="sd">        Private Attributes:</span>
+<span class="sd">            - self._available_commands (list): List of all Command objects that is added to the</span>
+<span class="sd">              *console*.</span>
+<span class="sd">            - self._processed_flag_options (bool): Indicates whether or not the</span>
+<span class="sd">              self._terminal_process_flags() function has been called. In other words, whether or</span>
+<span class="sd">              not the terminal flags has been parsed and Display_Information has been initialized.</span>
+<span class="sd">            - self._DI_settings (dict): Internal variable to pass initialized Display_Information</span>
+<span class="sd">              settings through internal class methods. Holds the value of Console initialization</span>
+<span class="sd">              parameter DI_settings.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="kn">import</span> <span class="nn">sys</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">DI_settings</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&quot;DI_settings not of type &#39;dict&#39;&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">disable_default_flags</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&quot;disable_default_flags not of type &#39;bool&#39;&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">disable_auto_process_flags</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&quot;disable_auto_process_flags not of type &#39;bool&#39;&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_available_commands</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">terminal</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">terminal_active_flags</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">terminal_additional_args</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_processed_flag_options</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_DI_settings</span> <span class="o">=</span> <span class="n">DI_settings</span>
+        <span class="c">#Attributes available in flag/command supplied methods</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_command_active_flags</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_command_additional_args</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_command_name</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="c">#Attributes available only within a flag handler</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_flag_name</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_flag_input</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">terminal</span> <span class="o">=</span> <span class="n">Command</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dummy</span><span class="p">,</span> <span class="s">&quot;Terminal - represents startup.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">disable_default_flags</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_add_default_flags</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">terminal_init</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">disable_auto_process_flags</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_terminal_process_flags</span><span class="p">()</span>
+
+                <span class="c">#Add default commands</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">console_add_command</span><span class="p">(</span><span class="s">&quot;help&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_console_help</span><span class="p">,</span> <span class="s">&quot;Print all available commands.&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">console_add_command</span><span class="p">(</span><span class="s">&quot;exit&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dummy</span><span class="p">,</span> <span class="s">&quot;Exit the console.&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Console.default_flag_handler"><a class="viewcode-back" href="../index.html#console.Console.default_flag_handler">[docs]</a>    <span class="k">def</span> <span class="nf">default_flag_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Default flag handler invoked when no method is supplied to the flag option.</span>
+<span class="sd">        This method functions for both the terminal and the console.</span>
+<span class="sd">        Override this function if you want to handle all flags in one method.</span>
+
+<span class="sd">        Available attributes:</span>
+<span class="sd">            - self.current_command_active_flags (list): List of dictionaries holding all present</span>
+<span class="sd">              flags when invoking this command.</span>
+<span class="sd">            - self.current_command_additional_args (list): List of string objects, all unaccounted</span>
+<span class="sd">              for tokens invoking this command.</span>
+<span class="sd">            - self.current_command_name (str): *Command.command_name* that was invoked with</span>
+<span class="sd">              the flag that called this method. For the terminal, this value is &#39;TERMINAL&#39;.</span>
+<span class="sd">            - self.current_flag_name (str): *longf* that called this method.</span>
+<span class="sd">            - self.current_flag_input (): None if flag require no input. Object is converted to</span>
+<span class="sd">              its expected object.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">flag</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_flag_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;Executing flag &#39;</span><span class="si">%s</span><span class="s">&#39; default method handler. Input is &#39;</span><span class="si">%s</span><span class="s">&#39;&quot;</span><span class="p">,</span> <span class="n">flag</span><span class="p">,</span>
+                <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_flag_input</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="Console.console_cleanup"><a class="viewcode-back" href="../index.html#console.Console.console_cleanup">[docs]</a>    <span class="k">def</span> <span class="nf">console_cleanup</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Method is called when the in-program console initiated by :meth:`console_start`</span>
+<span class="sd">        is terminating. Override this method to cleanup anything you may require.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="Console.console_start"><a class="viewcode-back" href="../index.html#console.Console.console_start">[docs]</a>    <span class="k">def</span> <span class="nf">console_start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">threaded</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">daemon</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Start the in-program console. This will run in the terminal where the program</span>
+<span class="sd">        was initiated.</span>
+
+<span class="sd">        Kwargs:</span>
+<span class="sd">            - threaded (bool): Determine whether or not to start the console in a seperate thread.</span>
+<span class="sd">              Doing so will continiue execution after this method is called.</span>
+<span class="sd">            - daemon (bool): Determine whether or not the console running in a thread should</span>
+<span class="sd">              behave like a daemon. A daemon operates just like a normal thread, but when the</span>
+<span class="sd">              MainThread seizes execution, this thread will to. This option has no effect if</span>
+<span class="sd">              the *threaded* argument is False.</span>
+
+<span class="sd">        If console is set to be threaded, apply a try catch around the remainder of your program,</span>
+<span class="sd">        (exluding the call to *console_start*) catching KeyboardInterrupt. When caught,</span>
+<span class="sd">        set the event object returned from a threaded call to *console_start* to set().</span>
+<span class="sd">        This will terminate the running (nondaemon) thread after the enter key has been struck.</span>
+<span class="sd">        .. note::</span>
+<span class="sd">            Due to the blocking nature of raw_input, the enter key must be struck for the</span>
+<span class="sd">            thread to check the status of the shutdown event.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            - *shutdown* threading.Event object if console is a thread.</span>
+<span class="sd">            - *None* if console is not a thread.(Will return when console exits)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">program_console</span> <span class="o">=</span> <span class="n">Console_Program</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">display_information_settings</span><span class="p">,</span> <span class="n">threaded</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">threaded</span><span class="p">:</span>
+            <span class="n">program_console</span><span class="o">.</span><span class="n">daemon</span> <span class="o">=</span> <span class="n">daemon</span>
+            <span class="n">program_console</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+            <span class="k">return</span> <span class="n">program_console</span><span class="o">.</span><span class="n">shutdown</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">program_console</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+            <span class="k">return</span> <span class="bp">None</span>
+</div>
+<div class="viewcode-block" id="Console.console_add_command"><a class="viewcode-back" href="../index.html#console.Console.console_add_command">[docs]</a>    <span class="k">def</span> <span class="nf">console_add_command</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">description</span><span class="p">,</span> <span class="n">usage</span><span class="o">=</span><span class="s">&quot;&quot;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Creates a new in-console command.</span>
+
+<span class="sd">        In order to add flag options to this newly created command, use :meth:`Command.add_flag`</span>
+<span class="sd">        method on the returned object.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            :class:`Command`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">command</span> <span class="o">=</span> <span class="n">Command</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">description</span><span class="p">,</span> <span class="n">usage</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_available_commands</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">command</span>
+</div>
+<div class="viewcode-block" id="Console.terminal_init"><a class="viewcode-back" href="../index.html#console.Console.terminal_init">[docs]</a>    <span class="k">def</span> <span class="nf">terminal_init</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Called before terminal args are parsed. This allows for custom flags to be</span>
+<span class="sd">        added by overriding this method. Add flag options by calling</span>
+<span class="sd">        :meth:`Console.terminal_add_flag`.</span>
+
+<span class="sd">        If Console is initialized with disable_auto_process_flags, you can add the flags</span>
+<span class="sd">        after initialization and manually call :meth:`terminal_process_flags`. Be warned:</span>
+<span class="sd">        :class:`Display_Information` is not initialized until flags are processed.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">terminal</span><span class="o">.</span><span class="n">add_flag</span><span class="p">(</span><span class="s">&quot;--test&quot;</span><span class="p">,</span> <span class="nb">input</span><span class="o">=</span><span class="n">FLAG_INPUT_FLOAT</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Console.terminal_add_flag"><a class="viewcode-back" href="../index.html#console.Console.terminal_add_flag">[docs]</a>    <span class="k">def</span> <span class="nf">terminal_add_flag</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">longf</span><span class="p">,</span> <span class="n">shortf</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;</span><span class="p">,</span> <span class="nb">input</span><span class="o">=</span><span class="n">FLAG_INPUT_IGNORE</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Add a flag option to the terminal.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            - longf (str): *long* flag name with two leading dashes used to indicate</span>
+<span class="sd">              the activation of this flag option.</span>
+<span class="sd">        Kwargs:</span>
+<span class="sd">            - shortf (str): *short* flag name with one leading dash and only one character,</span>
+<span class="sd">              used to indicate the activation of this flag. This is a shortcut option of the</span>
+<span class="sd">              required **longf** argument.</span>
+<span class="sd">            - description (str): Short description of what this flag does. This information</span>
+<span class="sd">              is available when the --help flag is present.</span>
+<span class="sd">            - input (int): Indicate that this flag option requires additional input directly</span>
+<span class="sd">              succeeding the flag option. The *int* value supplied is one of the following</span>
+<span class="sd">              defined flags:</span>
+<span class="sd">                0. **FLAG_INPUT_IGNORE** No input is expected. This is the default option.</span>
+<span class="sd">                1. **FLAG_INPUT_STR** *string* input is expected.</span>
+<span class="sd">                2. **FLAG_INPUT_INT** *integer* input is expected.</span>
+<span class="sd">                3. **FLAG_INPUT_FLOAT** *float* input is expected.</span>
+<span class="sd">            - method (callable method): If present, this method will be executed once the</span>
+<span class="sd">              flag option is present.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            CallError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_processed_flag_options</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">CallError</span><span class="p">(</span><span class="s">&quot;Programming Error: Attempting to add a terminal flag after terminal &quot;</span>
+                    <span class="s">&quot;flags have been parsed. Adding terminal flags must be done within overidden &quot;</span>
+                    <span class="s">&quot;method terminal_init or Console must be initialized with &quot;</span>
+                    <span class="s">&quot;disable_auto_process_flags set to True. See documentation.&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">terminal</span><span class="o">.</span><span class="n">add_flag</span><span class="p">(</span><span class="n">longf</span><span class="p">,</span> <span class="n">shortf</span><span class="p">,</span> <span class="n">description</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">method</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Console.terminal_quickadd_flags"><a class="viewcode-back" href="../index.html#console.Console.terminal_quickadd_flags">[docs]</a>    <span class="k">def</span> <span class="nf">terminal_quickadd_flags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">longf_list</span><span class="p">,</span> <span class="n">shortf_str</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Quick and dirty way to add terminal flags. Utilizeable in two cases:</span>
+<span class="sd">            1. :meth:`terminal_init`</span>
+<span class="sd">            2. If :meth:`Console` is initialized with *disable_auto_process_flags*, than this</span>
+<span class="sd">               method can be called upon the :class:`Console` object and followed by a call to</span>
+<span class="sd">               the parsing function :meth:`terminal_process_flags` when all flag options are</span>
+<span class="sd">               added.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            - longf_list (list): All list items must be of type &#39;string&#39;. Each item correponds</span>
+<span class="sd">              to one flag entry. The list item takes the form *&quot;longflag=option&quot;*, where</span>
+<span class="sd">              *&#39;longflag&#39;* is the flag name and *&#39;option&#39;* is the input type.</span>
+<span class="sd">                * *&quot;ignore&quot;* for **FLAG_INPUT_IGNORE**. This option *&#39;=ignore&#39;* may be left out of</span>
+<span class="sd">                  string, as it is the default option. Eg. string only needs to be *&quot;longflag&quot;*.</span>
+<span class="sd">                * *&quot;float&quot;* for **FLAG_INPUT_FLOAT**</span>
+<span class="sd">                * *&quot;str&quot;* for **FLAG_INPUT_STR**</span>
+<span class="sd">                * *&quot;int&quot;* for **FLAG_INPUT_INT**</span>
+<span class="sd">        Kwargs:</span>
+<span class="sd">            - shortf_str (str): a string of characters, at most *n* characters long where *n*</span>
+<span class="sd">              is the number of list items in *&#39;longf_list&#39;*. Each characters represents</span>
+<span class="sd">              the correponding longf **in-order** of apperance. If no short flag is desired, a</span>
+<span class="sd">              questionmark (?) will place no short flag for the associated flag.</span>
+<span class="sd">              Eg. &quot;rs?o&quot; would correspond to atleast 4 flags, but only 3 of them are assigned</span>
+<span class="sd">              a short flag.</span>
+
+<span class="sd">        No description will be given for the flag, and the :meth:`default_flag_handler` will</span>
+<span class="sd">        be assigned as its activation method.</span>
+
+<span class="sd">        Example:</span>
+<span class="sd">            self.terminal_quickadd_opts([&quot;radius=float&quot;, &quot;show&quot;, &quot;circles=int&quot;, &quot;file&quot;], &quot;r?c&quot;)</span>
+<span class="sd">        would produce the flags:</span>
+<span class="sd">            - -r --radius [float]</span>
+<span class="sd">            - --show</span>
+<span class="sd">            - -c --circles [int]</span>
+<span class="sd">            - --file</span>
+
+<span class="sd">        .. note::</span>
+<span class="sd">            This method should **ONLY** be utilized in the above mentioned cases. Failure to do</span>
+<span class="sd">            so will result in an **CallError** exception.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            AttributeError, CallError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">longf_list</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&quot;Argument &#39;longf_list&#39; is not of type &#39;list&#39;&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">shortf_str</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shortf_str</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&quot;Argument &#39;shortf_str&#39; is not of type &#39;string&#39;&quot;</span><span class="p">)</span>
+
+        <span class="n">shortf_list</span> <span class="o">=</span> <span class="p">[</span><span class="bp">None</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">longf_list</span><span class="p">))]</span>
+        <span class="k">if</span> <span class="n">shortf_str</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">shortf_str</span><span class="p">)):</span>
+                <span class="k">if</span> <span class="n">shortf_str</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&#39;?&#39;</span><span class="p">:</span>
+                    <span class="n">shortf_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">shortf_str</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">flag_string</span> <span class="ow">in</span> <span class="n">longf_list</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">flag_string</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="n">err_str</span> <span class="o">=</span> <span class="s">&quot;List item in argument &#39;longf_list&#39; is not of type &#39;string&#39;&quot;</span>
+                <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="n">err_str</span><span class="p">)</span>
+
+            <span class="n">flag_list</span> <span class="o">=</span> <span class="n">flag_string</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;=&quot;</span><span class="p">)</span>
+            <span class="n">input_type</span> <span class="o">=</span> <span class="n">FLAG_INPUT_IGNORE</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">flag_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">option</span> <span class="o">=</span> <span class="n">flag_list</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">option</span> <span class="o">==</span> <span class="n">STR_FLAG_INPUT_STR</span><span class="p">:</span>
+                    <span class="n">input_type</span> <span class="o">=</span> <span class="n">FLAG_INPUT_STR</span>
+                <span class="k">elif</span> <span class="n">option</span> <span class="o">==</span> <span class="n">STR_FLAG_INPUT_INT</span><span class="p">:</span>
+                    <span class="n">input_type</span> <span class="o">=</span> <span class="n">FLAG_INPUT_INT</span>
+                <span class="k">elif</span> <span class="n">option</span> <span class="o">==</span> <span class="n">STR_FLAG_INPUT_FLOAT</span><span class="p">:</span>
+                    <span class="n">input_type</span> <span class="o">=</span> <span class="n">FLAG_INPUT_FLOAT</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">terminal_add_flag</span><span class="p">(</span><span class="n">flag_list</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">shortf_list</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="nb">input</span><span class="o">=</span><span class="n">input_type</span><span class="p">)</span>
+            <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+</div>
+<div class="viewcode-block" id="Console.terminal_process_flags"><a class="viewcode-back" href="../index.html#console.Console.terminal_process_flags">[docs]</a>    <span class="k">def</span> <span class="nf">terminal_process_flags</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Attempts to process terminal flag options and initialize :class:`Display_Information`.</span>
+<span class="sd">        This will fail if terminal flags have already been processed. This method is</span>
+<span class="sd">        automatically called internally if :class:`Console` initialization parameter</span>
+<span class="sd">        *disable_auto_process_flags* is not set.</span>
+
+<span class="sd">        .. note::</span>
+<span class="sd">            This method should **ONLY** be called when :class:`Console` is initialized with</span>
+<span class="sd">            *disable_auto_process_flags*. If called after terminal flags have been processed,</span>
+<span class="sd">            a **CallError** will be raised. Simailary if called twise.</span>
+
+
+<span class="sd">        Raises:</span>
+<span class="sd">            CallError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_processed_flag_options</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">CallError</span><span class="p">(</span><span class="s">&quot;Programming Error: Terminal has already parsed flag inputs. &quot;</span>
+                <span class="s">&quot;If you ment to call this method you probably need to initialize Console with &quot;</span>
+                <span class="s">&quot;disable_auto_process_flags&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_terminal_process_flags</span><span class="p">()</span>
+</div>
+    <span class="k">def</span> <span class="nf">_terminal_process_flags</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Process the terminal input line and execute the methods associated with present flags</span>
+
+<span class="sd">        Modules:</span>
+<span class="sd">            sys</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">import</span> <span class="nn">sys</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_processed_flag_options</span> <span class="o">=</span> <span class="bp">True</span>
+
+        <span class="n">parser</span> <span class="o">=</span> <span class="n">_Console_Parser</span><span class="p">()</span>
+        <span class="n">parser</span><span class="o">.</span><span class="n">parse_line</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">terminal</span><span class="p">,</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">terminal_active_flags</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">get_active_flags</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">terminal_additional_args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">get_additional_args</span><span class="p">()</span>
+
+
+        <span class="k">def</span> <span class="nf">_update_active_DI</span><span class="p">(</span><span class="n">level</span><span class="p">):</span>
+            <span class="k">for</span> <span class="nb">map</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">terminal_active_flags</span><span class="p">:</span>
+                <span class="n">flag</span> <span class="o">=</span> <span class="nb">map</span><span class="p">[</span><span class="s">&quot;longf&quot;</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">flag</span> <span class="o">==</span> <span class="s">&quot;--verbose&quot;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_DI_settings</span><span class="p">[</span><span class="s">&quot;verbose&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">level</span>
+                <span class="k">elif</span> <span class="n">flag</span> <span class="o">==</span> <span class="s">&quot;--debug&quot;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_DI_settings</span><span class="p">[</span><span class="s">&quot;debug&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">level</span>
+                <span class="k">elif</span> <span class="n">flag</span> <span class="o">==</span> <span class="s">&quot;--verbose-debug&quot;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_DI_settings</span><span class="p">[</span><span class="s">&quot;verbosedebug&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">level</span>
+
+        <span class="n">do_exit</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="n">exit_map</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">log_level</span> <span class="o">=</span> <span class="n">DI_STDOUT</span>
+        <span class="k">for</span> <span class="nb">map</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">terminal_active_flags</span><span class="p">:</span>
+            <span class="n">flag</span> <span class="o">=</span> <span class="nb">map</span><span class="p">[</span><span class="s">&quot;longf&quot;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">flag</span> <span class="o">==</span> <span class="s">&quot;--help&quot;</span><span class="p">:</span>
+                <span class="n">exit_map</span> <span class="o">=</span> <span class="nb">map</span>
+                <span class="n">do_exit</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">elif</span> <span class="n">flag</span> <span class="o">==</span> <span class="s">&quot;--log&quot;</span><span class="p">:</span>
+                <span class="n">_update_active_DI</span><span class="p">(</span><span class="n">DI_LOG</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">flag</span> <span class="o">==</span> <span class="s">&quot;--log-stdout&quot;</span><span class="p">:</span>
+                <span class="n">_update_active_DI</span><span class="p">(</span><span class="n">DI_STDOUT_LOG</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">flag</span> <span class="o">==</span> <span class="s">&quot;--verbose&quot;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_DI_settings</span><span class="p">[</span><span class="s">&quot;verbose&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">DI_STDOUT</span>
+            <span class="k">elif</span> <span class="n">flag</span> <span class="o">==</span> <span class="s">&quot;--debug&quot;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_DI_settings</span><span class="p">[</span><span class="s">&quot;debug&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">DI_STDOUT</span>
+            <span class="k">elif</span> <span class="n">flag</span> <span class="o">==</span> <span class="s">&quot;--verbose-debug&quot;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_DI_settings</span><span class="p">[</span><span class="s">&quot;debug&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">DI_STDOUT</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_DI_settings</span><span class="p">[</span><span class="s">&quot;verbosedebug&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">DI_STDOUT</span>
+
+        <span class="k">if</span> <span class="n">do_exit</span><span class="p">:</span>
+            <span class="n">exit_map</span><span class="p">[</span><span class="s">&quot;method&quot;</span><span class="p">]()</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">()</span>
+
+        <span class="n">Display_Information</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_DI_settings</span><span class="p">)</span>
+
+        <span class="c">#Call flags in order of apperance in string</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_command_name</span> <span class="o">=</span> <span class="s">&quot;TERMINAL&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_command_active_flags</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">terminal_active_flags</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_command_additional_args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">terminal_additional_args</span>
+        <span class="k">for</span> <span class="nb">map</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">terminal_active_flags</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">current_flag_name</span> <span class="o">=</span> <span class="nb">map</span><span class="p">[</span><span class="s">&quot;longf&quot;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">current_flag_input</span> <span class="o">=</span> <span class="nb">map</span><span class="p">[</span><span class="s">&quot;input&quot;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="nb">map</span><span class="p">[</span><span class="s">&quot;method&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">default_flag_handler</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="nb">map</span><span class="p">[</span><span class="s">&quot;method&quot;</span><span class="p">]()</span>
+
+    <span class="k">def</span> <span class="nf">_add_default_flags</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Assist function to add all default flags</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">terminal</span><span class="o">.</span><span class="n">add_flag</span><span class="p">(</span><span class="s">&quot;--log&quot;</span><span class="p">,</span> <span class="s">&quot;-l&quot;</span><span class="p">,</span>
+                <span class="s">&quot;Route all -v, -d &amp; -D print to logfile instead of STDOUT.&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">terminal</span><span class="o">.</span><span class="n">add_flag</span><span class="p">(</span><span class="s">&quot;--log-stdout&quot;</span><span class="p">,</span> <span class="s">&quot;-L&quot;</span><span class="p">,</span>
+                <span class="s">&quot;Route all -v, -d &amp; -D print to both logfile and STDOUT.&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">terminal</span><span class="o">.</span><span class="n">add_flag</span><span class="p">(</span><span class="s">&quot;--verbose&quot;</span><span class="p">,</span> <span class="s">&quot;-v&quot;</span><span class="p">,</span> <span class="s">&quot;Print detailed program flow to STDOUT.&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">terminal</span><span class="o">.</span><span class="n">add_flag</span><span class="p">(</span><span class="s">&quot;--debug&quot;</span><span class="p">,</span> <span class="s">&quot;-d&quot;</span><span class="p">,</span>
+                <span class="s">&quot;Print debug information in program flow to STDOUT.&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">terminal</span><span class="o">.</span><span class="n">add_flag</span><span class="p">(</span><span class="s">&quot;--verbose-debug&quot;</span><span class="p">,</span> <span class="s">&quot;-D&quot;</span><span class="p">,</span>
+                <span class="s">&quot;Print detailed debug information in program flow to STDOUT.&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_console_help</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Print all available commands from the console</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">print_help</span> <span class="o">=</span> <span class="n">_Print_Help_Console</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">print_help</span><span class="o">.</span><span class="n">print_help</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_available_commands</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_dummy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+</div>
+<span class="k">class</span> <span class="nc">Console_Program</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">,</span> <span class="n">Display_Information</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Implements the in-program console loop</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">console_object</span><span class="p">,</span> <span class="n">DI_console_settings</span><span class="o">=</span><span class="n">DI_CONSOLE_IGNORE</span><span class="p">,</span> <span class="n">is_thread</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Args:</span>
+<span class="sd">            - console_object (Console): Reference to the Console object</span>
+
+<span class="sd">        Kwargs:</span>
+<span class="sd">            - DI_console_settings (): Can be one of these values:</span>
+<span class="sd">                * *(dict)* with the original settings needed for :class:`Display_Information`</span>
+<span class="sd">                * *(int)* flag</span>
+<span class="sd">                    1. **DI_CONSOLE_IGNORE** - Set all settings to *ignore*.</span>
+<span class="sd">                    2. **DI_CONSOLE_IHERIT** - Inherit all DI settings from console</span>
+<span class="sd">            - is_thread (bool): Determine whether or not the in-program console should start</span>
+<span class="sd">              as a thread.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            TypeError, AttributeError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">is_thread</span><span class="p">:</span>
+            <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">console_object</span><span class="p">,</span> <span class="n">Console</span><span class="p">)</span> <span class="o">==</span> <span class="bp">False</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;Input object is not instance of class Console&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">console</span> <span class="o">=</span> <span class="n">console_object</span>
+
+        <span class="n">DI_init</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">DI_console_settings</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">DI_console_settings</span> <span class="o">==</span> <span class="n">DI_CONSOLE_IGNORE</span><span class="p">:</span>
+                <span class="n">DI_init</span> <span class="o">=</span> <span class="bp">None</span>
+            <span class="k">elif</span> <span class="n">DI_console_settings</span> <span class="o">==</span> <span class="n">DI_CONSOLE_INHERIT</span><span class="p">:</span>
+                <span class="n">DI_init</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">console</span><span class="o">.</span><span class="n">display_information_settings</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&quot;Argument &#39;DI_console_settings&#39; integer flag values are &quot;</span>
+                        <span class="s">&quot;out of bounds. No valid flag.&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">DI_console_settings</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="n">DI_init</span> <span class="o">=</span> <span class="n">DI_console_settings</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;Argument &#39;DI_console_settings&#39; is not of supported input types: &quot;</span>
+                    <span class="s">&quot;&#39;int&#39;(flags) or &#39;dict&#39;&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">shutdown</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+
+        <span class="n">Display_Information</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">DI_init</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Method starts the in-program console.</span>
+
+<span class="sd">        Not initiated directly, but through :meth:`Console.console_start`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">import</span> <span class="nn">sys</span>
+        <span class="n">do_loop</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="n">parser</span> <span class="o">=</span> <span class="n">_Console_Parser</span><span class="p">()</span>
+
+        <span class="k">while</span> <span class="n">do_loop</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">shutdown</span><span class="o">.</span><span class="n">is_set</span><span class="p">():</span>
+                    <span class="k">raise</span> <span class="ne">KeyboardInterrupt</span>
+
+                <span class="n">input_string</span> <span class="o">=</span> <span class="nb">raw_input</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\n</span><span class="s"> # &quot;</span><span class="p">)</span>
+                <span class="n">input_list</span> <span class="o">=</span> <span class="n">input_string</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">input_list</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="k">continue</span>
+
+                <span class="n">command_found</span> <span class="o">=</span> <span class="bp">False</span>
+                <span class="k">for</span> <span class="n">command</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">console</span><span class="o">.</span><span class="n">_available_commands</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">command</span><span class="o">.</span><span class="n">command_name</span> <span class="o">==</span> <span class="n">input_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+                        <span class="n">command_found</span> <span class="o">=</span> <span class="bp">True</span>
+                        <span class="n">parser</span><span class="o">.</span><span class="n">parse_line</span><span class="p">(</span><span class="n">command</span><span class="p">,</span> <span class="n">input_string</span><span class="p">)</span>
+                        <span class="k">break</span>
+
+                <span class="k">if</span> <span class="n">command_found</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">console</span><span class="o">.</span><span class="n">command_active_flags</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">get_active_flags</span><span class="p">()</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">console</span><span class="o">.</span><span class="n">command_additional_args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">get_additional_args</span><span class="p">()</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">console</span><span class="o">.</span><span class="n">command_name</span> <span class="o">=</span> <span class="n">command</span><span class="o">.</span><span class="n">command_name</span>
+
+                    <span class="n">do_exit</span> <span class="o">=</span> <span class="bp">False</span>
+                    <span class="k">for</span> <span class="nb">map</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">console</span><span class="o">.</span><span class="n">command_active_flags</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="nb">map</span><span class="p">[</span><span class="s">&quot;longf&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s">&quot;--help&quot;</span><span class="p">:</span>
+                            <span class="n">do_exit</span> <span class="o">=</span> <span class="bp">True</span>
+                            <span class="k">break</span>
+                    <span class="k">if</span> <span class="n">do_exit</span><span class="p">:</span>
+                        <span class="nb">map</span><span class="p">[</span><span class="s">&quot;method&quot;</span><span class="p">]()</span>
+                        <span class="k">continue</span>
+
+                    <span class="k">for</span> <span class="nb">map</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">console</span><span class="o">.</span><span class="n">command_active_flags</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">console</span><span class="o">.</span><span class="n">current_flag_input</span> <span class="o">=</span> <span class="nb">map</span><span class="p">[</span><span class="s">&#39;input&#39;</span><span class="p">]</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">console</span><span class="o">.</span><span class="n">current_flag_name</span> <span class="o">=</span> <span class="nb">map</span><span class="p">[</span><span class="s">&#39;longf&#39;</span><span class="p">]</span>
+                        <span class="nb">map</span><span class="p">[</span><span class="s">&#39;method&#39;</span><span class="p">]()</span>
+
+                    <span class="n">command</span><span class="o">.</span><span class="n">method</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="n">input_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&quot;exit&quot;</span><span class="p">:</span>
+                        <span class="n">do_loop</span> <span class="o">=</span> <span class="bp">False</span>
+
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">string</span> <span class="o">=</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">Unknown command &#39;</span><span class="si">%s</span><span class="s">&#39;. Type &#39;help&#39; for available &quot;</span>\
+                            <span class="s">&quot;commands.&quot;</span> <span class="o">%</span> <span class="n">input_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                    <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">string</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">EOFError</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">vdebug</span><span class="p">(</span><span class="s">&quot;EOFError raised - Did user push ctrl-D? Exception ignored.&quot;</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="k">except</span> <span class="p">(</span><span class="ne">KeyboardInterrupt</span><span class="p">,</span> <span class="ne">SystemExit</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">console</span><span class="o">.</span><span class="n">console_cleanup</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span><span class="p">(</span><span class="s">&quot;Terminating console due to system exception.&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">SystemExit</span>
+
+            <span class="c">#Console terminates with an exit call. Cleanup</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">console</span><span class="o">.</span><span class="n">console_cleanup</span><span class="p">()</span>
+
+<span class="k">class</span> <span class="nc">_Console_Parser</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Internal</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Internal structure help parse either a list of strings or a string.</span>
+<span class="sd">        The string will be broken into tokens. The list will remove the first element</span>
+<span class="sd">        if it equals sys.argv[0] (the program name).</span>
+
+<span class="sd">        Modules:</span>
+<span class="sd">            sys</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            TypeError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">import</span> <span class="nn">sys</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">program_name</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>    <span class="c">#sys.argv[0]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">active_flags</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">additional_args</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">_precheck_input</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">input</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Sanity check input, always ordering it to a list of arguments without program name</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="nb">input</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">input</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">program_name</span><span class="p">:</span>
+                <span class="k">return</span> <span class="nb">input</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="nb">input</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="nb">input</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">input</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;Input is not of type &#39;str&#39; or &#39;list&#39;&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">get_active_flags</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;*getter* function to retrieve all active flags.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - None if no command is parsed with :meth:`parse_line`</span>
+<span class="sd">            - Empty list ([]) if no flags where present for last parsed line.</span>
+<span class="sd">            - List filled with dictionaries, {&#39;longf&#39;:(str), &#39;description&#39;:(str), &#39;input&#39;:(),</span>
+<span class="sd">              &#39;method&#39;:(callable method)}</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">active_flags</span>
+
+    <span class="k">def</span> <span class="nf">get_additional_args</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;*getter* function to retrieve all additional arguments.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - None if no command is parsed with :meth:`parse_line`</span>
+<span class="sd">            - Emptry list ([]) if no additional arguments where present last parsed line.</span>
+<span class="sd">            - List filled with all unaccounted for arguments (eg, did not match any flags (and</span>
+<span class="sd">              their required input) from :class:`Command` defined with :meth:`Command.add_flag`</span>
+<span class="sd">              (which is used by :meth:`Console.add_flag`)).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">additional_args</span>
+
+    <span class="k">def</span> <span class="nf">parse_line</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">is_command</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;input can be either string or a list</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">active_flags</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">additional_args</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">inputlist</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_precheck_input</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">is_command</span><span class="p">:</span>
+            <span class="n">inputlist</span> <span class="o">=</span> <span class="n">inputlist</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+
+        <span class="n">index</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">list_length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">inputlist</span><span class="p">)</span>
+        <span class="n">flag_name</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">while</span> <span class="n">index</span> <span class="o">&lt;</span> <span class="n">list_length</span><span class="p">:</span>
+            <span class="n">found_active_flag</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="k">for</span> <span class="nb">map</span> <span class="ow">in</span> <span class="n">command</span><span class="o">.</span><span class="n">available_flags</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">inputlist</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">==</span> <span class="nb">map</span><span class="p">[</span><span class="s">&quot;longf&quot;</span><span class="p">]:</span>
+                    <span class="n">found_active_flag</span> <span class="o">=</span> <span class="bp">True</span>
+                    <span class="n">flag_name</span> <span class="o">=</span> <span class="n">inputlist</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+                    <span class="k">break</span>
+                <span class="k">if</span> <span class="n">inputlist</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">==</span> <span class="nb">map</span><span class="p">[</span><span class="s">&quot;shortf&quot;</span><span class="p">]:</span>
+                    <span class="n">found_active_flag</span> <span class="o">=</span> <span class="bp">True</span>
+                    <span class="n">flag_name</span> <span class="o">=</span> <span class="n">inputlist</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+                    <span class="k">break</span>
+
+            <span class="k">if</span> <span class="n">found_active_flag</span><span class="p">:</span>
+                <span class="n">input_value</span> <span class="o">=</span> <span class="bp">None</span>
+                <span class="k">if</span> <span class="nb">map</span><span class="p">[</span><span class="s">&quot;input&quot;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">FLAG_INPUT_IGNORE</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="p">(</span><span class="n">index</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">&gt;=</span> <span class="n">list_length</span><span class="p">):</span>
+                        <span class="nb">type</span> <span class="o">=</span> <span class="s">&quot;string&quot;</span>
+                        <span class="k">if</span> <span class="nb">map</span><span class="p">[</span><span class="s">&quot;input&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">FLAG_INPUT_STR</span><span class="p">:</span>
+                            <span class="nb">type</span> <span class="o">=</span> <span class="s">&quot;str&quot;</span>
+                        <span class="k">elif</span> <span class="nb">map</span><span class="p">[</span><span class="s">&quot;input&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">FLAG_INPUT_INT</span><span class="p">:</span>
+                            <span class="nb">type</span> <span class="o">=</span> <span class="s">&quot;int&quot;</span>
+                        <span class="k">elif</span> <span class="nb">map</span><span class="p">[</span><span class="s">&quot;input&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">FLAG_INPUT_FLOAT</span><span class="p">:</span>
+                            <span class="nb">type</span> <span class="o">=</span> <span class="s">&quot;float&quot;</span>
+                        <span class="k">raise</span> <span class="n">InputError</span><span class="p">(</span><span class="s">&quot;Missing input for flag &#39;</span><span class="si">%s</span><span class="s">&#39;. Expecting </span><span class="si">%s</span><span class="s"> &quot;</span><span class="p">,</span>
+                                <span class="n">flag_name</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span>
+
+                    <span class="n">index</span> <span class="o">+=</span> <span class="mi">1</span>
+                    <span class="k">if</span> <span class="nb">map</span><span class="p">[</span><span class="s">&quot;input&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">FLAG_INPUT_STR</span><span class="p">:</span>
+                        <span class="n">input_value</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">inputlist</span><span class="p">[</span><span class="n">index</span><span class="p">])</span>
+                    <span class="k">elif</span> <span class="nb">map</span><span class="p">[</span><span class="s">&quot;input&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">FLAG_INPUT_INT</span><span class="p">:</span>
+                        <span class="k">try</span><span class="p">:</span>
+                            <span class="n">input_value</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">inputlist</span><span class="p">[</span><span class="n">index</span><span class="p">])</span>
+                        <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                            <span class="k">raise</span> <span class="n">InputError</span><span class="p">(</span><span class="s">&quot;Invalid input &#39;</span><span class="si">%s</span><span class="s">&#39; for flag &#39;</span><span class="si">%s</span><span class="s">&#39;. Expected int&quot;</span><span class="p">,</span>
+                                    <span class="n">inputlist</span><span class="p">[</span><span class="n">index</span><span class="p">],</span> <span class="n">flag_name</span><span class="p">)</span>
+                    <span class="k">elif</span> <span class="nb">map</span><span class="p">[</span><span class="s">&quot;input&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">FLAG_INPUT_FLOAT</span><span class="p">:</span>
+                        <span class="k">try</span><span class="p">:</span>
+                            <span class="n">input_value</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">inputlist</span><span class="p">[</span><span class="n">index</span><span class="p">])</span>
+                        <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                            <span class="k">raise</span> <span class="n">InputError</span><span class="p">(</span><span class="s">&quot;Invalid input &#39;</span><span class="si">%s</span><span class="s">&#39; for flag &#39;</span><span class="si">%s</span><span class="s">&#39;. Expected float&quot;</span><span class="p">,</span>
+                                    <span class="n">inputlist</span><span class="p">[</span><span class="n">index</span><span class="p">],</span> <span class="n">flag_name</span><span class="p">)</span>
+
+                <span class="n">flag_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;longf&#39;</span><span class="p">:</span><span class="nb">map</span><span class="p">[</span><span class="s">&quot;longf&quot;</span><span class="p">],</span> <span class="s">&#39;description&#39;</span><span class="p">:</span><span class="nb">map</span><span class="p">[</span><span class="s">&quot;description&quot;</span><span class="p">],</span>
+                        <span class="s">&#39;input&#39;</span><span class="p">:</span><span class="n">input_value</span><span class="p">,</span> <span class="s">&#39;method&#39;</span><span class="p">:</span><span class="nb">map</span><span class="p">[</span><span class="s">&quot;method&quot;</span><span class="p">]}</span>
+                <span class="c">#Sanity check if we are to add this flag dict or not: May already be present</span>
+                <span class="k">for</span> <span class="n">added_dict</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">active_flags</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">added_dict</span><span class="p">[</span><span class="s">&quot;longf&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">flag_dict</span><span class="p">[</span><span class="s">&quot;longf&quot;</span><span class="p">]:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">active_flags</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">added_dict</span><span class="p">)</span>
+                        <span class="k">break</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">active_flags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">flag_dict</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">additional_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">inputlist</span><span class="p">[</span><span class="n">index</span><span class="p">])</span>
+            <span class="n">index</span> <span class="o">+=</span> <span class="mi">1</span>
+
+<span class="k">class</span> <span class="nc">_Print_Help_Console</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Assist class to pretty print Command flags or all available Commands in the console.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">console</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">console</span> <span class="o">=</span> <span class="n">console</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">TS</span> <span class="o">=</span> <span class="n">Terminal_Size</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">MIN_DESC_WIDTH</span> <span class="o">=</span> <span class="mi">20</span>
+
+    <span class="k">def</span> <span class="nf">_calculate_bounds</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">print_flags</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Args:</span>
+<span class="sd">            - input: Command if print_flags is True. List of commands if not.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">offset</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="k">if</span> <span class="n">print_flags</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">flag</span> <span class="ow">in</span> <span class="nb">input</span><span class="o">.</span><span class="n">available_flags</span><span class="p">:</span>
+                <span class="n">line</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_flags_string</span><span class="p">(</span><span class="n">flag</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">line</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">offset</span><span class="p">:</span>
+                    <span class="n">offset</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">command</span> <span class="ow">in</span> <span class="nb">input</span><span class="p">:</span>
+                <span class="n">line</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">command</span><span class="o">.</span><span class="n">command_name</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">line</span> <span class="o">&gt;</span> <span class="n">offset</span><span class="p">:</span>
+                    <span class="n">offset</span> <span class="o">=</span> <span class="n">line</span>
+
+        <span class="k">return</span> <span class="n">offset</span>
+
+    <span class="k">def</span> <span class="nf">_get_flags_string</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">flag</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Assist function to get flag and input string,</span>
+<span class="sd">        eg. -t --test  [float]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">line</span> <span class="o">=</span> <span class="s">&quot;  &quot;</span>
+        <span class="k">if</span> <span class="n">flag</span><span class="p">[</span><span class="s">&quot;shortf&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">line</span> <span class="o">+=</span> <span class="n">flag</span><span class="p">[</span><span class="s">&quot;shortf&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="s">&quot;, &quot;</span>
+        <span class="n">line</span> <span class="o">+=</span> <span class="n">flag</span><span class="p">[</span><span class="s">&quot;longf&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="s">&quot;  &quot;</span>
+
+        <span class="nb">input</span> <span class="o">=</span> <span class="n">flag</span><span class="p">[</span><span class="s">&quot;input&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">input</span> <span class="o">==</span> <span class="n">FLAG_INPUT_STR</span><span class="p">:</span>
+            <span class="n">line</span> <span class="o">+=</span> <span class="s">&quot;[str]&quot;</span>
+        <span class="k">elif</span> <span class="nb">input</span> <span class="o">==</span> <span class="n">FLAG_INPUT_INT</span><span class="p">:</span>
+            <span class="n">line</span> <span class="o">+=</span> <span class="s">&quot;[int]&quot;</span>
+        <span class="k">elif</span> <span class="nb">input</span> <span class="o">==</span> <span class="n">FLAG_INPUT_FLOAT</span><span class="p">:</span>
+            <span class="n">line</span> <span class="o">+=</span> <span class="s">&quot;[float]&quot;</span>
+
+        <span class="k">return</span> <span class="n">line</span>
+
+    <span class="k">def</span> <span class="nf">print_help</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">print_flags</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Args:</span>
+<span class="sd">            - input - Command object if print_flags is True. List of available commands if not.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_calculate_bounds</span><span class="p">(</span><span class="nb">input</span><span class="p">,</span> <span class="n">print_flags</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">TS</span><span class="o">.</span><span class="n">refresh</span><span class="p">()</span>
+        <span class="n">offset</span> <span class="o">+=</span> <span class="mi">7</span>         <span class="c">#magic number</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">TS</span><span class="o">.</span><span class="n">width</span> <span class="o">-</span> <span class="n">offset</span><span class="p">)</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">MIN_DESC_WIDTH</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&quot;Unable to write help options due to narrow terminal. Please expand it.&quot;</span>
+            <span class="n">tmp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lineoffset_desc</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">MIN_DESC_WIDTH</span>
+            <span class="k">print</span> <span class="s">&quot;Current width: </span><span class="si">%d</span><span class="s">. Minimum required width: </span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">TS</span><span class="o">.</span><span class="n">width</span><span class="p">,</span> <span class="n">tmp</span><span class="p">)</span>
+            <span class="k">return</span>
+
+        <span class="n">usage</span> <span class="o">=</span> <span class="s">&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">print_flags</span><span class="p">:</span>
+            <span class="n">print_list</span> <span class="o">=</span> <span class="nb">input</span><span class="o">.</span><span class="n">available_flags</span>
+            <span class="n">usage</span> <span class="o">=</span> <span class="s">&quot;Usage: &quot;</span> <span class="o">+</span> <span class="nb">input</span><span class="o">.</span><span class="n">command_name</span> <span class="o">+</span> <span class="s">&quot; [--flags] &quot;</span> <span class="o">+</span><span class="nb">input</span><span class="o">.</span><span class="n">usage</span><span class="o">+</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">print_list</span> <span class="o">=</span> <span class="nb">input</span>
+            <span class="n">usage</span> <span class="o">=</span> <span class="s">&quot;Usage: &quot;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">console</span><span class="o">.</span><span class="n">terminal</span><span class="o">.</span><span class="n">command_name</span> <span class="o">+</span> <span class="s">&quot; [--flags] &quot;</span> <span class="o">+</span>\
+                <span class="bp">self</span><span class="o">.</span><span class="n">console</span><span class="o">.</span><span class="n">terminal</span><span class="o">.</span><span class="n">usage</span><span class="o">+</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+
+        <span class="k">print</span> <span class="n">usage</span>
+        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">print_list</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">print_flags</span><span class="p">:</span>
+                <span class="n">line</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_flags_string</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+                <span class="n">token_list</span> <span class="o">=</span> <span class="n">item</span><span class="p">[</span><span class="s">&#39;description&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">line</span> <span class="o">=</span> <span class="s">&quot;  &quot;</span> <span class="o">+</span> <span class="n">item</span><span class="o">.</span><span class="n">command_name</span>
+                <span class="n">token_list</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">description</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+
+            <span class="n">num_padd_chars</span> <span class="o">=</span> <span class="n">offset</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+            <span class="n">line</span> <span class="o">+=</span> <span class="s">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s">&#39; &#39;</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">num_padd_chars</span><span class="p">)])</span>
+            <span class="n">line_length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">token_list</span><span class="p">:</span>
+                <span class="n">token_length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">line_length</span> <span class="o">+</span> <span class="n">token_length</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">TS</span><span class="o">.</span><span class="n">width</span><span class="p">:</span>
+                    <span class="k">print</span> <span class="n">line</span>
+                    <span class="n">line</span> <span class="o">=</span> <span class="s">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s">&#39; &#39;</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">offset</span><span class="p">)])</span>
+                    <span class="n">line_length</span> <span class="o">=</span> <span class="n">offset</span>
+                <span class="n">line</span> <span class="o">+=</span> <span class="n">token</span> <span class="o">+</span> <span class="s">&quot; &quot;</span>
+                <span class="n">line_length</span> <span class="o">+=</span> <span class="n">token_length</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">line</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">print</span> <span class="n">line</span>
+
+<span class="k">class</span> <span class="nc">Terminal_Size</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return the terminal size. Works on Windows, Linux, OS X, Cygwin</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Modules:</span>
+<span class="sd">            platform</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">import</span> <span class="nn">platform</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">width</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">height</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_os</span> <span class="o">=</span> <span class="n">platform</span><span class="o">.</span><span class="n">system</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">refresh</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">refresh</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Perform a check for terminal size. Updates attributes self.width and self.height with</span>
+<span class="sd">        new values.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            - **True** if terminal size has changed.</span>
+<span class="sd">            - **False** if terminal size is unchanged.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">is_changed</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">h</span><span class="p">)</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_terminal_size</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">w</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">width</span><span class="p">:</span>
+            <span class="n">is_changed</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">width</span> <span class="o">=</span> <span class="n">w</span>
+        <span class="k">if</span> <span class="n">h</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">height</span><span class="p">:</span>
+            <span class="n">is_changed</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">height</span> <span class="o">=</span> <span class="n">h</span>
+
+        <span class="k">return</span> <span class="n">is_changed</span>
+
+    <span class="k">def</span> <span class="nf">get_terminal_size</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return the terminal size in a tuple</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Tuple (width, height)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">tuple_xy</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_os</span> <span class="o">==</span> <span class="s">&#39;Windows&#39;</span><span class="p">:</span>
+           <span class="n">tuple_xy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_getTS_Windows</span><span class="p">()</span>
+           <span class="k">if</span> <span class="n">tuple_xy</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+              <span class="n">tuple_xy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_getTS_tput</span><span class="p">()</span>
+              <span class="c"># needed for window&#39;s python in cygwin&#39;s xterm!</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_os</span> <span class="o">==</span> <span class="s">&#39;Linux&#39;</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_os</span> <span class="o">==</span> <span class="s">&#39;Darwin&#39;</span> <span class="ow">or</span>  <span class="bp">self</span><span class="o">.</span><span class="n">current_os</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;CYGWIN&#39;</span><span class="p">):</span>
+           <span class="n">tuple_xy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_getTS_Linux</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">tuple_xy</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">tuple_xy</span> <span class="o">=</span> <span class="p">(</span><span class="mi">80</span><span class="p">,</span> <span class="mi">25</span><span class="p">)</span>      <span class="c"># default value</span>
+        <span class="k">return</span> <span class="n">tuple_xy</span>
+
+
+    <span class="k">def</span> <span class="nf">_getTS_Windows</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return terminal size on Windows. Shamelessly stolen from the internet. Source: Unknown</span>
+
+<span class="sd">        Modules:</span>
+<span class="sd">            ctype.windll, ctype.create_string_buffer, struct</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span> <span class="nn">ctypes</span> <span class="kn">import</span> <span class="n">windll</span><span class="p">,</span> <span class="n">create_string_buffer</span>
+
+            <span class="c"># stdin handle is -10</span>
+            <span class="c"># stdout handle is -11</span>
+            <span class="c"># stderr handle is -12</span>
+
+            <span class="n">h</span> <span class="o">=</span> <span class="n">windll</span><span class="o">.</span><span class="n">kernel32</span><span class="o">.</span><span class="n">GetStdHandle</span><span class="p">(</span><span class="o">-</span><span class="mi">12</span><span class="p">)</span>
+            <span class="n">csbi</span> <span class="o">=</span> <span class="n">create_string_buffer</span><span class="p">(</span><span class="mi">22</span><span class="p">)</span>
+            <span class="n">res</span> <span class="o">=</span> <span class="n">windll</span><span class="o">.</span><span class="n">kernel32</span><span class="o">.</span><span class="n">GetConsoleScreenBufferInfo</span><span class="p">(</span><span class="n">h</span><span class="p">,</span> <span class="n">csbi</span><span class="p">)</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="n">res</span><span class="p">:</span>
+            <span class="kn">import</span> <span class="nn">struct</span>
+            <span class="p">(</span><span class="n">bufx</span><span class="p">,</span> <span class="n">bufy</span><span class="p">,</span> <span class="n">curx</span><span class="p">,</span> <span class="n">cury</span><span class="p">,</span> <span class="n">wattr</span><span class="p">,</span>
+             <span class="n">left</span><span class="p">,</span> <span class="n">top</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="n">bottom</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">maxy</span><span class="p">)</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">unpack</span><span class="p">(</span><span class="s">&quot;hhhhHhhhhhh&quot;</span><span class="p">,</span> <span class="n">csbi</span><span class="o">.</span><span class="n">raw</span><span class="p">)</span>
+            <span class="n">sizex</span> <span class="o">=</span> <span class="n">right</span> <span class="o">-</span> <span class="n">left</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="n">sizey</span> <span class="o">=</span> <span class="n">bottom</span> <span class="o">-</span> <span class="n">top</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="k">return</span> <span class="n">sizex</span><span class="p">,</span> <span class="n">sizey</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">_getTS_tput</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Get terminal size from xterm. Shamelessly stolen from the internet. Source: Unknown</span>
+
+<span class="sd">        Modules:</span>
+<span class="sd">            subprocess</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c"># get terminal width</span>
+        <span class="c"># src: http://stackoverflow.com/questions/263890/how-do-i-find-the-width-height-of-a-terminal-window</span>
+        <span class="k">try</span><span class="p">:</span>
+           <span class="kn">import</span> <span class="nn">subprocess</span>
+           <span class="n">proc</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">([</span><span class="s">&quot;tput&quot;</span><span class="p">,</span> <span class="s">&quot;cols&quot;</span><span class="p">],</span><span class="n">stdin</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span><span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">)</span>
+           <span class="n">output</span><span class="o">=</span><span class="n">proc</span><span class="o">.</span><span class="n">communicate</span><span class="p">(</span><span class="nb">input</span><span class="o">=</span><span class="bp">None</span><span class="p">)</span>
+           <span class="n">cols</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+           <span class="n">proc</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">([</span><span class="s">&quot;tput&quot;</span><span class="p">,</span> <span class="s">&quot;lines&quot;</span><span class="p">],</span><span class="n">stdin</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span><span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">)</span>
+           <span class="n">output</span><span class="o">=</span><span class="n">proc</span><span class="o">.</span><span class="n">communicate</span><span class="p">(</span><span class="nb">input</span><span class="o">=</span><span class="bp">None</span><span class="p">)</span>
+           <span class="n">rows</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+           <span class="k">return</span> <span class="p">(</span><span class="n">cols</span><span class="p">,</span><span class="n">rows</span><span class="p">)</span>
+        <span class="k">except</span><span class="p">:</span>
+           <span class="k">return</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">_getTS_Linux</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Get terminal size from linux. Shamelessly stolen from the internet. Source: Unknown</span>
+
+<span class="sd">        Modules:</span>
+<span class="sd">            fcntl, termios, struct, os</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">def</span> <span class="nf">ioctl_GWINSZ</span><span class="p">(</span><span class="n">fd</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="kn">import</span> <span class="nn">fcntl</span><span class="o">,</span> <span class="nn">termios</span><span class="o">,</span> <span class="nn">struct</span><span class="o">,</span> <span class="nn">os</span>
+                <span class="n">cr</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">unpack</span><span class="p">(</span><span class="s">&#39;hh&#39;</span><span class="p">,</span> <span class="n">fcntl</span><span class="o">.</span><span class="n">ioctl</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="n">termios</span><span class="o">.</span><span class="n">TIOCGWINSZ</span><span class="p">,</span><span class="s">&#39;1234&#39;</span><span class="p">))</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">None</span>
+            <span class="k">return</span> <span class="n">cr</span>
+        <span class="n">cr</span> <span class="o">=</span> <span class="n">ioctl_GWINSZ</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="n">ioctl_GWINSZ</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="ow">or</span> <span class="n">ioctl_GWINSZ</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">cr</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">fd</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">ctermid</span><span class="p">(),</span> <span class="n">os</span><span class="o">.</span><span class="n">O_RDONLY</span><span class="p">)</span>
+                <span class="n">cr</span> <span class="o">=</span> <span class="n">ioctl_GWINSZ</span><span class="p">(</span><span class="n">fd</span><span class="p">)</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">fd</span><span class="p">)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="k">pass</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">cr</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">cr</span> <span class="o">=</span> <span class="p">(</span><span class="n">env</span><span class="p">[</span><span class="s">&#39;LINES&#39;</span><span class="p">],</span> <span class="n">env</span><span class="p">[</span><span class="s">&#39;COLUMNS&#39;</span><span class="p">])</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">None</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">cr</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">cr</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="n">c</span> <span class="o">=</span> <span class="n">Console</span><span class="p">({</span><span class="s">&#39;debug&#39;</span><span class="p">:</span><span class="n">DI_STDOUT</span><span class="p">},</span> <span class="bp">False</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+    <span class="n">shutdown</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">console_start</span><span class="p">(</span><span class="bp">True</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">import</span> <span class="nn">time</span>
+        <span class="k">while</span> <span class="n">threading</span><span class="o">.</span><span class="n">active_count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="n">shutdown</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../index.html">console_baseclass_python 1.0 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Vegard Sandengen.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
