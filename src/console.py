@@ -33,23 +33,6 @@ STR_FLAG_INPUT_STR = "str"
 STR_FLAG_INPUT_INT = "int"
 STR_FLAG_INPUT_FLOAT = "float"
 
-class Enum(set):
-    """Implements a pythonic way to enumerate items to strings.
-    Usage: ANIMAL = Enum(["DOG", "CAT"])
-    results in a call to ANIMAL.DOG equals "DOG".
-    """
-    def __getattr__(self, name):
-        if name in self:
-            return name
-        raise AttributeError
-
-"""
-All supported keyboard comparisons
-"""
-KEY = Enum(["ARROW_UP", "ARROW_DOWN", "ARROW_LEFT", "ARROW_RIGHT", "ENTER", "BACKSPACE",
-        "END_OF_TEXT", "END_OF_TRANSMISSION"])
-
-
 class InputError(Exception):
     """Exception raised when terminal input does not match expected input,
     eg. flag --example require an integer input(FLAG_INPUT_INT), but a string is supplied.
@@ -89,21 +72,28 @@ class Display_Information(object):
                 2. **DI_LOG** Message will be sent to logfile.
                 3. **DI_STDOUT_LOG** Message will be sent to both STDOUT and logfile
               Default behaviour is to **DI_IGNORE** everything.
-              Expected keys for additional settigs are *'log_fd'* and *'log_filename'*.
+              Expected keys for additional settings are *'log_filename_prefix'*
+              and *'log_filename'*.
               Expected values for keys are
-                - *'log_fd'*: **file** descriptor that will be used to append log messages.
-                  If no file descriptor is supplied, one will be created at initialization.
-                - *'log_filename'*: **str** prefix in log filename. Has no effect if log_fd
-                  is supplied. Default name is 'CONSOLE'.
-              If additional keys are present, they will be ignored.
+                - *'log_filename'*: **str** The full filename of the logfile. This filename is
+                  generated at initialization if not present (and may be supplied as argument
+                  to other instances to share settings/log_filename). This filename is opened
+                  for append when a verbose call is made.
+                - *'log_filename_prefix'*: **str** Prefix for the log filename. Has no effect if
+                  *log_filename* is supplied. Default value is 'CONSOLE'.
+            If additional keys are present, they will be ignored.
 
         Attribute:
-            - self.fd (file): Holds filedescriptor to logfile
+            - self.log_filename (str): Holds the string name of the logfile.
+            - self.log_filename_prefix (str): Holds the prefix of which the logfile is created
+              with.
+            - self.log_directory (str): Holds the path to log directory, including trailing '/'.
             - self.display_information_settings (dict): Holds the current settings for all modes.
-              Identical to the expected structure of supplied argument DI_settings.
+              Identical to the expected structure of supplied argument DI_settings. All settings
+              will have a value after initialization.
 
         Expected DI_settings would look something like:
-        {'v':DI_STDOUT, 'd':DI_LOG, 'vd':DI_STDOUT_LOG, 'log_fd':(file), 'log_filename':(str)}
+        {'v':DI_STDOUT, 'd':DI_LOG, 'vd':DI_STDOUT_LOG, 'log_filename_prefix':(str), 'log_filename':(str)}
 
         Raises:
             OSError, TypeError, AttributeError
@@ -122,33 +112,35 @@ class Display_Information(object):
         import os
 
         self.display_information_settings = {}
-        log_fd = None
-        log_filename = None
+        self.log_filename_prefix = None
+        self.log_filename = None
         try:
             os.makedirs('logs')
         except OSError as exception:
             if exception.errno != errno.EEXIST:
                 raise
 
-
-        if "log_fd" in DI_settings:
-            log_fd = DI_settings["log_fd"]
+        if "log_filename_prefix" in DI_settings:
+            self.log_filename_prefix = DI_settings["log_filename_prefix"]
         if "log_filename" in DI_settings:
-            log_filename = DI_settings["log_filename"]
-        if log_fd:
-            if not isinstance(log_fd, file):
-                raise TypeError("Invalid argument 'log_fd'. Must be of type 'file'")
-            self.fd = log_fd
-        else:
-            if log_filename == None:
-                self.filename = "CONSOLE"
-            else:
-                self.filename = log_filename
-            self.display_information_settings['log_filename'] = self.filename
+            self.log_filename = DI_settings["log_filename"]
 
-            self.filename += "["+str(time.asctime())+"]"
-            self.fd = None  #Open it at runtime
-        self.display_information_settings['log_fd'] = self.fd
+        if self.log_filename_prefix:
+            if not isinstance(self.log_filename_prefix, str):
+                raise TypeError("Invalid argument 'log_filename_prefix'. Must be of type 'str'")
+        else:
+            self.log_filename_prefix = "CONSOLE"
+
+        if self.log_filename:
+            if not isinstance(self.log_filename, str):
+                raise TypeError("Invalid argument 'log_filename'. Must be of type 'str'")
+        else:
+            filename = self.log_filename_prefix
+            filename += "["+str(time.asctime())+"]"
+            self.log_filename = filename
+
+        self.display_information_settings['log_filename_prefix'] = self.log_filename_prefix
+        self.display_information_settings['log_filename'] = self.log_filename
 
         #Create delimiters for all supported settings, initializing them to false
         supported_settings = ['verbose', 'debug', 'verbosedebug']
@@ -174,16 +166,10 @@ class Display_Information(object):
 
         self._init_completed = True
 
-    def clean(self):
-        """Cleanup resources allocated within this object.
-        """
-        if self.fd:
-            if isinstance(self.fd, file):
-                self.fd.close()
-
     def verbose(self, format, *args):
         """Outputs the supplied message to the appropriate channel spesified at initialization.
-        The **'verbose'** setting determines actions of this call.
+        The **'verbose'** setting determines actions of this call. A newline is appended to the
+        end of the message.
 
         Args:
             - format (string): Message to submit, with associated identifiers for argument inputs.
@@ -197,7 +183,10 @@ class Display_Information(object):
 
     def debug(self, format, *args):
         """Outputs the supplied message to the appropriate channel spesified at initialization.
-        The **'debug'** setting determines actions of this call
+        The **'debug'** setting determines actions of this call. A newline is appended to the
+        end of the message.
+
+        Message is prefixed with current thread and calling method.
 
         Args:
             - format (string): Message to submit, with associated identifiers for argument inputs.
@@ -210,7 +199,10 @@ class Display_Information(object):
 
     def vdebug(self, format, *args):
         """Outputs the supplied message to the appropriate channe spesified at initialization.
-        The **'verbosedebug'** setting determines actions of this call.
+        The **'verbosedebug'** setting determines actions of this call. A newline is appended to
+        the end of the message.
+
+        Message is prefixed with current thread and calling method.
 
         Args:
             - format (string): Message to submit, with associated identifiers for argument inputs.
@@ -241,7 +233,8 @@ class Display_Information(object):
         return display
 
     def _assistant_information_relay(self, msg, DI_level):
-        """Write the message to the output levels determined by the DI_level
+        """Write the message to the output levels determined by the DI_level.
+        Will create/open the file if DI_level is appending to it.
         """
         import sys
 
@@ -252,14 +245,8 @@ class Display_Information(object):
             sys.stdout.write(msg)
 
         if DI_level == DI_LOG or DI_level == DI_STDOUT_LOG:
-            if self.fd == None:
-                try:
-                    self.fd = open('./logs/'+self.filename, 'w')
-                except:
-                    print "ERROR: [Display_Information: __init__] Failed to open logfile: "+filename
-                    raise
-                self.display_information_settings['log_fd'] = self.fd
-            self.fd.write(msg)
+            with open(self.log_directory + self.log_filename, "a") as f:
+                f.write(msg)
 
 class Command(object):
     """Class to hold all vital information about a spesific command,
@@ -454,8 +441,8 @@ class Console(Display_Information):
             self._terminal_process_flags()
 
                 #Add default commands
-        self.console_add_command("exit", self._dummy, "Exit the console.")
         self.console_add_command("help", self._console_help, "Print all available commands.")
+        self.console_add_command("exit", self._dummy, "Exit the console.")
 
     def default_flag_handler(self):
         """Default flag handler invoked when no method is supplied to the flag option.
@@ -494,15 +481,28 @@ class Console(Display_Information):
               behave like a daemon. A daemon operates just like a normal thread, but when the
               MainThread seizes execution, this thread will to. This option has no effect if
               the *threaded* argument is False.
+
+        If console is set to be threaded, apply a try catch around the remainder of your program,
+        (exluding the call to *console_start*) catching KeyboardInterrupt. When caught,
+        set the event object returned from a threaded call to *console_start* to set().
+        This will terminate the running (nondaemon) thread after the enter key has been struck.
+        .. note::
+            Due to the blocking nature of raw_input, the enter key must be struck for the
+            thread to check the status of the shutdown event.
+
+        Returns:
+            - *shutdown* threading.Event object if console is a thread.
+            - *None* if console is not a thread.(Will return when console exits)
         """
 
-        program_console = Console_Program(self, self.console_cleanup,
-                self.display_information_settings, threaded)
+        program_console = Console_Program(self, self.display_information_settings, threaded)
         if threaded:
             program_console.daemon = daemon
             program_console.start()
+            return program_console.shutdown
         else:
             program_console.run()
+            return None
 
     def console_add_command(self, name, method, description, usage=""):
         """Creates a new in-console command.
@@ -738,7 +738,8 @@ class Console(Display_Information):
     def _console_help(self):
         """Print all available commands from the console
         """
-        print "IN CONSOLE HELP"
+        print_help = _Print_Help_Terminal(self._available_commands)
+        print_help.print_commands()
 
     def _dummy(self):
         pass
@@ -768,7 +769,7 @@ class Console_Program(threading.Thread, Display_Information):
         @self.cleanup               METHOD callable. Equals @cleanup.
     """
 
-    def __init__(self, console_object, cleanup=None, DI_console_settings=DI_CONSOLE_IGNORE, is_thread=True):
+    def __init__(self, console_object, DI_console_settings=DI_CONSOLE_IGNORE, is_thread=True):
         """
             Initialize the in-program console
             DI_CONSOLE_IGNORE
@@ -783,10 +784,6 @@ class Console_Program(threading.Thread, Display_Information):
 
         if isinstance(console_object, Console) == False:
             raise TypeError("Input object is not instance of class Console")
-        if hasattr(cleanup, '__call__'):
-            self.cleanup = cleanup
-        else:
-            self.cleanup = None
         self.console = console_object
 
         DI_init = None
@@ -804,23 +801,25 @@ class Console_Program(threading.Thread, Display_Information):
             raise TypeError("Argument 'DI_console_settings' is not of supported input types: "
                     "'int'(flags) or 'dict'")
 
+        self.shutdown = threading.Event()
+
         Display_Information.__init__(self, DI_init)
 
     def run(self):
         """thread
         """
         import sys
-
         do_loop = True
         parser = _Console_Parser()
 
         while do_loop:
             try:
-                CI = Console_Input(self.console.display_information_settings)
-                input_string = CI.get_input(" # ")
+                if self.shutdown.is_set():
+                    raise KeyboardInterrupt
+
+                input_string = raw_input("\n # ")
                 input_list = input_string.split()
                 if len(input_list) <= 0:
-
                     continue
 
                 command_found = False
@@ -857,348 +856,16 @@ class Console_Program(threading.Thread, Display_Information):
                     string = "\nUnknown command '%s'. Type 'help' for available "\
                             "commands." % input_list[0]
                     sys.stdout.write(string)
-
+            except EOFError:
+                self.vdebug("EOFError raised - Did user push ctrl-D? Exception ignored.")
+                continue
             except (KeyboardInterrupt, SystemExit):
-                if hasattr(self.cleanup, '__call__'):
-                    self.cleanup()
+                self.console.console_cleanup()
                 self.verbose("Terminating console due to system exception.")
                 raise SystemExit
-            except:
-                self.console.clean() # TMP CODE: FIX
-                raise
 
-            if hasattr(self.cleanup, '__call__'):
-                self.cleanup()
-
-class Console_Input(Display_Information):
-    """
-        en.wikipedia.org/wiki/ANSI_escape_code
-    """
-    def __init__(self, DI_settings=None):
-        Display_Information.__init__(self, DI_settings)
-        self.history = []
-        self.input_buffer = []
-        self.input_index = 0
-        self.TM = Terminal_Manipulator()
-        self.TS = Terminal_Size()
-        self.input_spanning_rows = 0
-        self.last_column = 0
-
-        self.start_column = None
-        self.start_row = None
-        self.start_height = None
-
-    def erase_terminal_print(self):
-        import sys
-
-        if self.TS.refresh():
-            #Terminal size is changed. All perviosuly stored start variables
-            #may now be corrupted. Recalculate
-            pass
-
-        (curr_r, curr_c) = self.TM.get_cursor()
-        height_diff = curr_r - (self.start_row + (self.TS.height - self.start_height))
-        self.debug("Curr_r : %d. sr: %d. sh: %d. height: %d", curr_r, self.start_row,
-                self.start_height, self.TS.height)
-        self.debug("Height diff: %d", height_diff)
-        i = 0
-        while i < height_diff:
-            self.TM.clear_line()
-            i += 1
-            self.TM.move_cursor_up()
-            print "lol"
-            self.debug("Cleared one line and moved up")
-        return
-
-        #Restore to old cursor pos
-        esc_string = "\033["+str(self.start_row + height_diff)+";"+str(self.start_column)+"H"
-        sys.stdout.write(esc_string)
-        sys.stdout.write("\033[1K")     #Erase from start of line to cursor
-
-
-        """Taught process. cases:
-
-        - Cursor is at bottom of terminal: Unchanged size. No height difference.
-
-        - Cursor in middle of terminal.Unchanged size. Height difference
-
-        - Cursor in middle of termina. Changed size. Height difference and invalidating
-          spanning_rows
-        """
-
-    def get_input(self, prompt=""):
-        """TODO
-        """
-        import sys
-        import tty, termios
-
-        self.TS.refresh()
-        self.start_height = self.TS.height
-        (r, c) = self.TM.get_cursor()
-        self.start_row = r
-        self.start_column = c
-
-        sys.stdout.write(prompt)
-        self.last_column = 0
-        self.spanning_rows = 0
-        while True:
-            while True:
-                if self.TM.key_pressed():
-                    char = self.TM.getch()
-                    print "got ", [char]
-                    break
-            continue
-
-            if self.TM.is_key(char, KEY.ARROW_UP):
-                (r, c) = self.TM.get_cursor()
-                self.debug("Row: %d", r)
-                continue
-            elif self.TM.is_key(char, KEY.ARROW_DOWN):
-                sys.stdout.write("\r")
-                print self.spanning_rows
-                break
-            elif self.TM.is_key(char, KEY.ARROW_LEFT):
-                raise NotImplementedError
-            elif self.TM.is_key(char, KEY.ARROW_RIGHT):
-                raise NotImplementedError
-            elif self.TM.is_key(char, KEY.END_OF_TEXT):
-                raise NotImplementedError
-            elif self.TM.is_key(char, KEY.END_OF_TRANSMISSION):
-                raise NotImplementedError
-            elif self.TM.is_key(char, KEY.BACKSPACE):
-                self.erase_terminal_print()
-             #   sys.stdout.write(prompt)
-              #  sys.stdout.write("".join(self.input_buffer))
-                continue
-            elif self.TM.is_key(char, KEY.ENTER):
-                return "".join(self.input_buffer)
-            else:
-                self.input_buffer.insert(self.input_index, char)
-                self.input_index += 1
-
-            sys.stdout.write(char)
-            (curr_r, curr_c) = self.TM.get_cursor()
-            if curr_c < self.last_column:
-                self.spanning_rows += 1
-            self.last_column = curr_c
-
-
-class Terminal_Manipulator(object):
-    """
-
-    """
-    def __init__(self):
-        """todo
-        """
-        self._getch = None
-        self.key_pressed = None
-        self._getch_init()
-
-    def _getch_init(self):
-        try:
-            #Is Windows
-            import msvcrt
-            self._getch = self._getch_windows
-            self.key_pressed = self._key_pressed_windows
-        except ImportError:
-            pass
-
-        try:
-            import Carbon
-            Carbon.Evt  #If attribute is present, its a mac
-            self._getch = self._getch_mac
-            self.key_pressed = self._key_pressed_linux #UNTESTED - MUST TEST
-        except ImportError, AttributeError:
-            pass
-
-        self._getch = self._getch_linux
-        self.key_pressed = self._key_pressed_linux
-
-    def is_key(self, key, compare):
-        """Compare the string input key (typically fetched raw from the keyboard stdin) if it
-        is a match to intended compare keyboard key. The compare string is a defined string like
-        "ARROW_UP" whilst the raw key input counterpart is ANSI escaped sequence.
-        The comparison is done with both hex and octal string value for the ASCII *ESC* value.
-
-        Args:
-            - key (str): A string object holding to key input we wish to compare.
-            - compare (str): Item in the **KEY** :meth:`Enum` set. Eg. KEY.KEY_TO_COMPARE.
-              See all available **KEY** members.
-
-        Returns:
-            - **True** if raw input key equals the **KEY** literal
-            - **False** if it doesnt.
-        """
-
-        if compare == KEY.ARROW_UP:
-            if key == '\x1b[A' or key == '\033[A':
-                return True
-        elif compare == KEY.ARROW_DOWN:
-            if key == '\x1b[B' or key == '\033[B':
-                return True
-        elif compare == KEY.ARROW_LEFT:
-            if key == '\x1b[D' or key == '\033[D':
-                return True
-        elif compare == KEY.ARROW_RIGHT:
-            if key == '\x1b[C' or key == '\033[D':
-                return True
-        elif compare == KEY.BACKSPACE:
-            if key == '\x7f' or key == '\0177':
-                return True
-        elif compare == KEY.ENTER:
-            if key == '\r':
-                return True
-        elif compare == KEY.END_OF_TEXT:
-            if key == '\x03' or key == '\003':
-                return True
-        elif compare == KEY.END_OF_TRANSMISSION:
-            if key == '\x04' or key == '\004':
-                return True
-        else:
-            return False
-    def _key_pressed_linux(self):
-        """NOT A VIABLE WAY! TOO LAGGY INPUT. INPUT LOST
-        """
-        import select, sys, termios, tty
-
-        #save old settings
-        old_settings = termios.tcgetattr(sys.stdin)
-        #set terminal in raw
-        tty.setcbreak(sys.stdin.fileno())
-        input = select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
-        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
-        return input
-
-    def _key_pressed_windows(self):
-        import msvcrt
-        return msvcrt.kbhit()
-
-    def scroll_up(self, n='1'):
-        """Scroll current terminal line up n lines. Using a sys stdout ANSI escape sequence write
-        """
-        import sys
-        string = "\033["+n+"S"
-        sys.stdout.write(string)
-
-    def scroll_down(self, n='1'):
-        """Scroll current terminal line down n lines. Using a sys stdout ANSI escape sequence write
-        """
-        import sys
-        string = "\033["+n+"T"
-        sys.stdout.write(string)
-
-    def clear_line(self):
-        """Clear current terminal line with a sys stdout ANSI escape sequence write
-        """
-        import sys
-        sys.stdout.write('\033[2K')
-
-    def clear_terminal(self):
-        """Clear the terminal with a sys stdout ANSI escape sequence write
-        """
-        import sys
-        sys.stdout.write("\033[2J")
-        sys.stdout.write("\033[1;1H")
-
-    def move_cursor_back(self, n):
-        """Move the cursor back n characters by writing a ANSI escape sequence to stdout
-        """
-        import sys
-        ch = n
-        if isinstance(n, int):
-            ch = str(n)
-        string = "\033["+ch+"D"
-        sys.stdout.write(string)
-
-    def move_cursor_forward(self, n):
-        """Move the cursor forward n characters by writing a ANSI escape sequence to stdout
-        """
-        import sys
-        ch = n
-        if isinstance(n, int):
-            ch = str(n)
-        string = "\033["+ch+"C"
-        sys.stdout.write(string)
-
-    def move_cursor_up(self, n):
-        """Move the cursor up n lines by writing a ANSI escape sequence to stdout.
-        """
-        import sys
-        ch = n
-        if isinstance(n, int):
-            ch = str(n)
-        string = "\033["+ch+"A"
-        sys.stdout.write(string)
-
-    def get_cursor(self):
-        """Perform device status report to retrieve cursor pos
-        Return:
-            - (row, column) tuple
-        """
-        import sys
-        sys.stdout.write("\033[6n")
-        while True:
-            ch = self.getch()
-            if len(ch) == 0:
-                raise ValueError("Failed to retrieve device status report. Returning ESC "\
-                        "sequence was lost.")
-            if ch[0] == "\x1b" or ch[0] == "\033":
-                if ch[-1] == 'R':
-                    #Identifier for return call from the Device Status Report
-                    break
-
-        row_string = ""
-        column_string = ""
-        index = 2
-        while True:
-            if ch[index] == ';':
-                index += 1
-                break
-            row_string += ch[index]
-            index += 1
-        while True:
-            if ch[index] == 'R':
-                break
-            column_string += ch[index]
-            index += 1
-
-        return (int(row_string), int(column_string))
-
-
-
-    def getch(self):
-        """
-        """
-        sequence = self._getch()
-        if ord(sequence) == 27:   #decimal value for the ASCII ESC value
-            sequence += self._getch()
-            while True:
-                ch = self._getch()
-                sequence += ch
-                if ord(ch) < 0x7e and ord(ch) > 0x40:
-                    #Range of valid final byte in the escape sequence. Indicates the last byte
-                    break
-        return sequence
-
-    def _getch_windows(self):
-        import msvcrt
-        print "WINDOWS GETCH EVENT HANDLER"
-        raise NotImplementedError
-
-    def _getch_linux(self):
-        import sys, tty, termios
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        try:
-            tty.setraw(sys.stdin.fileno())
-            ch = sys.stdin.read(1)
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-        return ch
-
-    def _getch_mac(self):
-        print "MAC GETCH EVENT HANDLER"
-        raise NotImplementedError
+            #Console terminates with an exit call. Cleanup
+            self.console.console_cleanup()
 
 class _Console_Parser(object):
     """Internal
@@ -1320,6 +987,50 @@ class _Console_Parser(object):
             else:
                 self.additional_args.append(inputlist[index])
             index += 1
+
+class _Print_Help_Terminal(object):
+    """TODO: Merge terminal and command print help
+    """
+    def __init__(self, commands_list):
+        self.commands_list = commands_list
+        self.TS = Terminal_Size()
+        self.lineoffset_desc = 0
+        self.MIN_DESC_WIDTH = 20
+
+    def _calculate_bounds(self):
+        for command in self.commands_list:
+            length = len(command.command_name)
+            if length > self.lineoffset_desc:
+                self.lineoffset_desc = length
+
+    def print_commands(self):
+        self._calculate_bounds()
+        self.TS.refresh()
+        self.lineoffset_desc += 7 #magic number
+        if (self.TS.width - self.lineoffset_desc) < self.MIN_DESC_WIDTH:
+            print "Unable to write help options due to narrow terminal. Please expand it."
+            tmp = self.lineoffset_desc + self.MIN_DESC_WIDTH
+            print "Current width: %d. Minimum required width: %d" % (self.TS.width, tmp)
+            return
+
+
+        for command in self.commands_list:
+            line = "  "+command.command_name
+            num_padd_chars = self.lineoffset_desc - len(line)
+            line += "".join([" " for x in xrange(num_padd_chars)])
+
+            token_list = command.description.split()
+            line_length = len(line)
+            for token in token_list:
+                token_length = len(token)
+                if line_length + token_length >= self.TS.width:
+                    print line
+                    line = ''.join([' ' for x in xrange(self.lineoffset_desc)])
+                    line_length = self.lineoffset_desc
+                line += token + " "
+                line_length += token_length + 1
+            print line
+
 
 
 class _Print_Help_Command:
@@ -1530,5 +1241,12 @@ class Terminal_Size(object):
         return int(cr[1]), int(cr[0])
 
 if __name__ == '__main__':
-    c = Console({'debug':DI_LOG}, False, False)
-    c.console_start(True, False)
+    c = Console({'debug':DI_STDOUT}, False, False)
+    shutdown = c.console_start(True, False)
+    try:
+        import time
+        while threading.active_count > 0:
+            time.sleep(0.1)
+    except:
+        shutdown.set()
+
